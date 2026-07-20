@@ -1,0 +1,970 @@
+<title>ParentProof — Screen-by-Screen Design</title>
+<style>
+  :root{
+    --paper:#EEF1F5; --panel:#F6F8FB; --card:#FFFFFF;
+    --ink:#15233C; --ink-2:#45566F; --ink-3:#7C8AA0;
+    --line:#DBE1EA; --line-2:#EBEFF4;
+    --brand:#E39A16; --brand-deep:#B8760A; --brand-wash:#FBF1DD;
+    --good:#1E9E73; --good-wash:#E4F4EC;
+    --watch:#C77D18; --watch-wash:#F8EEDD;
+    --risk:#C6472E; --risk-wash:#F8E6E0;
+    --bezel:#0B1220; --bezel-2:#1b2635;
+    --wa-head:#075E54; --wa-bg:#E4DDD3; --wa-out:#DCF8C6; --wa-in:#FFFFFF;
+    --shadow:0 24px 60px -28px rgba(19,35,60,.55);
+    --serif:Georgia,"Iowan Old Style","Times New Roman",serif;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:"SF Mono",ui-monospace,"Cascadia Code",Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --paper:#0B111B; --panel:#111927; --card:#16202F;
+      --ink:#EAF0F7; --ink-2:#A9B7CA; --ink-3:#71809A;
+      --line:#273649; --line-2:#1B2637;
+      --brand:#F0AC33; --brand-deep:#E39A16; --brand-wash:#2A2416;
+      --good:#38BE8E; --good-wash:#12271F;
+      --watch:#E0A64B; --watch-wash:#2A2213;
+      --risk:#E4735A; --risk-wash:#2C1712;
+      --bezel:#05090f; --bezel-2:#141d29;
+      --wa-head:#1F2C33; --wa-bg:#0B141A; --wa-out:#065044; --wa-in:#1F2C33;
+      --shadow:0 24px 60px -28px rgba(0,0,0,.7);
+    }
+  }
+  :root[data-theme="light"]{
+    --paper:#EEF1F5; --panel:#F6F8FB; --card:#FFFFFF;
+    --ink:#15233C; --ink-2:#45566F; --ink-3:#7C8AA0;
+    --line:#DBE1EA; --line-2:#EBEFF4;
+    --brand:#E39A16; --brand-deep:#B8760A; --brand-wash:#FBF1DD;
+    --good:#1E9E73; --good-wash:#E4F4EC; --watch:#C77D18; --watch-wash:#F8EEDD;
+    --risk:#C6472E; --risk-wash:#F8E6E0;
+    --bezel:#0B1220; --wa-head:#075E54; --wa-bg:#E4DDD3; --wa-out:#DCF8C6; --wa-in:#FFFFFF;
+    --shadow:0 24px 60px -28px rgba(19,35,60,.55);
+  }
+  :root[data-theme="dark"]{
+    --paper:#0B111B; --panel:#111927; --card:#16202F;
+    --ink:#EAF0F7; --ink-2:#A9B7CA; --ink-3:#71809A;
+    --line:#273649; --line-2:#1B2637;
+    --brand:#F0AC33; --brand-deep:#E39A16; --brand-wash:#2A2416;
+    --good:#38BE8E; --good-wash:#12271F; --watch:#E0A64B; --watch-wash:#2A2213;
+    --risk:#E4735A; --risk-wash:#2C1712;
+    --bezel:#05090f; --wa-head:#1F2C33; --wa-bg:#0B141A; --wa-out:#065044; --wa-in:#1F2C33;
+    --shadow:0 24px 60px -28px rgba(0,0,0,.7);
+  }
+
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);
+    -webkit-font-smoothing:antialiased;line-height:1.5}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 24px}
+
+  /* ---------- page header ---------- */
+  header.top{padding:72px 0 40px}
+  .eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.22em;text-transform:uppercase;
+    color:var(--brand-deep);font-weight:600}
+  .seal{display:inline-flex;align-items:center;gap:9px;font-family:var(--mono);font-size:12px;
+    letter-spacing:.04em;color:var(--ink-2);border:1px solid var(--line);border-radius:999px;
+    padding:6px 12px 6px 8px;background:var(--card)}
+  .seal b{width:20px;height:20px;border-radius:50%;background:var(--brand);display:grid;place-items:center;
+    color:#1b1305;font-size:11px;font-weight:800;font-family:var(--sans)}
+  h1.title{font-family:var(--serif);font-weight:600;letter-spacing:-.01em;text-wrap:balance;
+    font-size:clamp(34px,5.4vw,60px);line-height:1.04;margin:20px 0 0}
+  h1.title em{font-style:italic;color:var(--brand-deep)}
+  .lede{max-width:62ch;color:var(--ink-2);font-size:clamp(16px,2vw,19px);margin:20px 0 0}
+  .posit{margin:26px 0 0;padding:18px 22px;border-left:3px solid var(--brand);background:var(--card);
+    border-radius:0 12px 12px 0;box-shadow:var(--shadow);max-width:640px}
+  .posit .en{font-family:var(--serif);font-size:19px;font-style:italic}
+  .posit .hi{color:var(--ink-3);font-size:14px;margin-top:6px}
+
+  /* ---------- system legend ---------- */
+  .legend{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin:44px 0 8px}
+  .lcard{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px 18px 20px}
+  .lcard h4{margin:0 0 14px;font-size:12px;font-family:var(--mono);letter-spacing:.14em;
+    text-transform:uppercase;color:var(--ink-3);font-weight:600}
+  .swatches{display:flex;gap:8px;flex-wrap:wrap}
+  .sw{display:flex;flex-direction:column;gap:6px;align-items:center;font-family:var(--mono);
+    font-size:10px;color:var(--ink-3)}
+  .sw i{width:38px;height:38px;border-radius:10px;border:1px solid rgba(0,0,0,.06);display:block}
+  .typerow{display:flex;flex-direction:column;gap:10px}
+  .typerow div{display:flex;justify-content:space-between;align-items:baseline;gap:10px;
+    padding-bottom:10px;border-bottom:1px dashed var(--line)}
+  .typerow div:last-child{border:0;padding:0}
+  .typerow small{font-family:var(--mono);font-size:10px;color:var(--ink-3);letter-spacing:.06em}
+  .states{display:flex;flex-direction:column;gap:10px}
+  .st{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--ink-2)}
+  .surfaces{display:flex;flex-direction:column;gap:12px}
+  .surf{display:flex;gap:11px;align-items:flex-start;font-size:13px;color:var(--ink-2)}
+  .surf b{font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;
+    background:var(--brand-wash);color:var(--brand-deep);padding:3px 7px;border-radius:6px;white-space:nowrap;margin-top:1px}
+
+  /* ---------- flow section ---------- */
+  section.flow{padding:52px 0 8px;border-top:1px solid var(--line);margin-top:56px}
+  .flow-head{display:flex;gap:16px;align-items:flex-start;max-width:760px}
+  .flow-num{font-family:var(--serif);font-size:44px;line-height:.8;color:var(--brand);font-style:italic;
+    flex:none;width:56px}
+  .flow-head h2{margin:0;font-family:var(--serif);font-weight:600;font-size:clamp(24px,3.2vw,32px);
+    letter-spacing:-.01em}
+  .flow-head p{margin:8px 0 0;color:var(--ink-2);font-size:15px}
+
+  .gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:34px 28px;margin:40px 0 0}
+  .plate{display:flex;flex-direction:column;align-items:center;gap:0}
+
+  /* ---------- device ---------- */
+  .phone{width:300px;flex:none;background:var(--bezel);border-radius:42px;padding:11px;
+    box-shadow:var(--shadow);position:relative}
+  .phone::after{content:"";position:absolute;left:50%;top:20px;transform:translateX(-50%);
+    width:96px;height:24px;background:var(--bezel);border-radius:0 0 16px 16px;z-index:6}
+  .screen{background:var(--card);border-radius:32px;overflow:hidden;height:600px;position:relative;
+    display:flex;flex-direction:column}
+  .sb{height:40px;flex:none;display:flex;align-items:center;justify-content:space-between;
+    padding:0 20px;font-size:12px;font-weight:600;color:var(--ink);z-index:5;position:relative}
+  .sb .r{display:flex;align-items:center;gap:5px}
+  .sb .bar{display:flex;align-items:flex-end;gap:2px;height:10px}
+  .sb .bar i{width:3px;background:var(--ink);border-radius:1px}
+  .sb .bat{width:20px;height:10px;border:1.4px solid var(--ink);border-radius:3px;position:relative;opacity:.85}
+  .sb .bat::after{content:"";position:absolute;right:-3px;top:3px;width:2px;height:4px;background:var(--ink);border-radius:0 1px 1px 0}
+  .sb .bat i{position:absolute;inset:1.6px;background:var(--ink);border-radius:1px;width:70%}
+  .view{flex:1;overflow-y:auto;overflow-x:hidden}
+  .view::-webkit-scrollbar{width:0}
+  .pad{padding:6px 20px 24px}
+
+  /* app chrome */
+  .appbar{display:flex;align-items:center;justify-content:space-between;padding:6px 20px 14px}
+  .brandmark{display:flex;align-items:center;gap:8px;font-weight:700;font-size:15px;letter-spacing:-.01em}
+  .brandmark b{width:22px;height:22px;border-radius:50%;background:var(--brand);color:#1b1305;
+    display:grid;place-items:center;font-size:12px;font-weight:800}
+  .kicker{font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3)}
+
+  .tabbar{flex:none;display:flex;justify-content:space-around;padding:9px 8px calc(9px + env(safe-area-inset-bottom));
+    border-top:1px solid var(--line);background:var(--card)}
+  .tab{display:flex;flex-direction:column;align-items:center;gap:4px;font-size:10px;color:var(--ink-3);font-weight:600}
+  .tab .ic{width:20px;height:20px;border-radius:6px;border:2px solid var(--ink-3);opacity:.7}
+  .tab.on{color:var(--brand-deep)}
+  .tab.on .ic{border-color:var(--brand);background:var(--brand-wash);opacity:1}
+
+  /* generic ui atoms */
+  h3.sh{font-family:var(--serif);font-size:22px;font-weight:600;margin:14px 0 4px;letter-spacing:-.01em;text-wrap:balance}
+  .sub{color:var(--ink-2);font-size:13.5px;margin:0}
+  .btn{display:block;width:100%;text-align:center;padding:14px;border-radius:14px;font-weight:700;
+    font-size:14px;border:0;cursor:pointer;background:var(--ink);color:var(--paper);letter-spacing:.01em}
+  .btn.ghost{background:transparent;color:var(--ink);border:1.5px solid var(--line)}
+  .btn.brand{background:var(--brand);color:#1b1305}
+  .btn.wa{background:var(--good);color:#fff}
+  .btn-row{display:flex;flex-direction:column;gap:10px;margin-top:14px}
+  .chip{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:10px;
+    letter-spacing:.08em;text-transform:uppercase;padding:4px 9px;border-radius:999px;font-weight:600}
+  .chip.recall{background:var(--line-2);color:var(--ink-2)}
+  .chip.understand{background:var(--brand-wash);color:var(--brand-deep)}
+  .chip.apply{background:#e7edfb;color:#3457a8}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:15px}
+  .divider{height:1px;background:var(--line);margin:14px 0}
+  .field{border:1.5px solid var(--line);border-radius:12px;padding:11px 13px;background:var(--card);
+    display:flex;flex-direction:column;gap:2px;margin-top:10px}
+  .field small{font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
+  .field .val{font-size:14px;font-weight:600}
+  .field.sel{border-color:var(--brand);box-shadow:0 0 0 3px var(--brand-wash)}
+  .pill{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:999px;font-size:11.5px;font-weight:700}
+  .pill.good{background:var(--good-wash);color:var(--good)}
+  .pill.watch{background:var(--watch-wash);color:var(--watch)}
+  .pill.risk{background:var(--risk-wash);color:var(--risk)}
+  .dot{width:8px;height:8px;border-radius:50%;flex:none}
+  .dot.good{background:var(--good)} .dot.watch{background:var(--watch)} .dot.risk{background:var(--risk)}
+
+  /* readiness ring */
+  .ring{width:132px;height:132px;border-radius:50%;display:grid;place-items:center;margin:4px auto;
+    background:conic-gradient(var(--rc,var(--good)) calc(var(--v,70)*1%), var(--line-2) 0)}
+  .ring::before{content:"";position:absolute;width:100px;height:100px;border-radius:50%;background:var(--card)}
+  .ring .rv{position:relative;text-align:center}
+  .ring .rv b{font-family:var(--mono);font-size:30px;font-weight:700;font-variant-numeric:tabular-nums;display:block;line-height:1}
+  .ring .rv small{font-family:var(--mono);font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3)}
+
+  /* bars */
+  .barline{margin:12px 0}
+  .barline .lab{display:flex;justify-content:space-between;font-size:12px;margin-bottom:5px}
+  .barline .lab b{font-family:var(--mono);font-variant-numeric:tabular-nums}
+  .track{height:8px;border-radius:99px;background:var(--line-2);overflow:hidden}
+  .track i{display:block;height:100%;border-radius:99px}
+
+  /* document look (reports) */
+  .doc{background:var(--card);border:1px solid var(--line);border-radius:16px;overflow:hidden}
+  .doc-hd{padding:16px 16px 14px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,var(--brand-wash),transparent)}
+  .doc-hd .stamp{float:right;font-family:var(--mono);font-size:8.5px;letter-spacing:.1em;
+    text-align:center;color:var(--brand-deep);border:1.5px solid var(--brand);border-radius:8px;
+    padding:5px 7px;transform:rotate(4deg);line-height:1.3;font-weight:600}
+  .doc-hd .t{font-family:var(--serif);font-size:19px;font-weight:600}
+  .doc-hd .m{font-family:var(--mono);font-size:10px;color:var(--ink-3);letter-spacing:.04em;margin-top:3px}
+  .doc-bd{padding:14px 16px 16px}
+  .lead{font-family:var(--serif);font-size:15.5px;line-height:1.4;color:var(--ink)}
+  .lead b{color:var(--brand-deep)}
+  .vs{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin:13px 0}
+  .vs .box{border:1px solid var(--line);border-radius:12px;padding:11px}
+  .vs .box small{font-family:var(--mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3)}
+  .vs .box p{margin:6px 0 0;font-size:12.5px;line-height:1.35}
+  .vs .box.mem{border-color:var(--risk);background:var(--risk-wash)}
+  .vs .box.und{border-color:var(--good);background:var(--good-wash)}
+  .gap{border-left:3px solid var(--risk);background:var(--risk-wash);border-radius:0 10px 10px 0;
+    padding:11px 13px;font-size:12.5px;margin-top:4px}
+  .gap b{color:var(--risk)}
+
+  /* prescription list */
+  .rx{display:flex;flex-direction:column;gap:0;margin-top:6px}
+  .rx .step{display:flex;gap:12px;padding:12px 0;border-bottom:1px dashed var(--line)}
+  .rx .step:last-child{border:0}
+  .rx .n{flex:none;width:26px;height:26px;border-radius:8px;background:var(--brand-wash);
+    color:var(--brand-deep);font-family:var(--mono);font-weight:700;font-size:12px;display:grid;place-items:center}
+  .rx .c b{font-size:13px} .rx .c p{margin:3px 0 0;font-size:12px;color:var(--ink-2);line-height:1.35}
+  .script{background:var(--panel);border:1px dashed var(--line);border-radius:10px;padding:10px 12px;margin-top:10px}
+  .script small{font-family:var(--mono);font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--brand-deep)}
+  .script p{margin:5px 0 0;font-family:var(--serif);font-style:italic;font-size:13px}
+
+  /* ledger / dashboard */
+  .rowitem{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 0;border-bottom:1px solid var(--line)}
+  .rowitem:last-child{border:0}
+  .rowitem .l{display:flex;align-items:center;gap:11px}
+  .subj-ic{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;font-family:var(--serif);
+    font-weight:700;font-size:15px;flex:none}
+  .spark{width:60px;height:26px;flex:none}
+  .metaline{display:flex;gap:8px;font-family:var(--mono);font-size:10px;color:var(--ink-3);margin-top:2px;letter-spacing:.03em}
+
+  .roi{background:var(--ink);color:var(--paper);border-radius:16px;padding:18px;position:relative;overflow:hidden}
+  .roi .k{font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;opacity:.65}
+  .roi .big{font-family:var(--serif);font-size:26px;font-weight:600;margin:6px 0 2px;line-height:1.1}
+  .roi .big em{color:var(--brand);font-style:normal}
+  .roi p{margin:8px 0 0;font-size:12px;opacity:.82;line-height:1.4}
+
+  /* predicted vs actual */
+  .pva{display:flex;align-items:center;gap:14px;margin-top:6px}
+  .pva .col{flex:1;text-align:center;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 8px}
+  .pva .col b{font-family:var(--mono);font-size:22px;font-weight:700;display:block;font-variant-numeric:tabular-nums}
+  .pva .col small{font-family:var(--mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3)}
+  .pva .eq{font-family:var(--mono);color:var(--good);font-weight:700;font-size:13px}
+
+  /* test screen */
+  .qwrap{padding:0 20px}
+  .qtop{display:flex;align-items:center;justify-content:space-between;padding:12px 0}
+  .qtimer{font-family:var(--mono);font-weight:700;font-size:15px;font-variant-numeric:tabular-nums}
+  .qprog{height:5px;border-radius:99px;background:var(--line-2);overflow:hidden;margin-bottom:16px}
+  .qprog i{display:block;height:100%;background:var(--brand);border-radius:99px}
+  .qtext{font-size:17px;font-weight:600;line-height:1.35;margin:8px 0 4px;letter-spacing:-.01em}
+  .qsub{font-family:var(--mono);font-size:12px;color:var(--ink-2);background:var(--panel);border-radius:10px;
+    padding:9px 11px;margin:10px 0}
+  .opt{border:1.5px solid var(--line);border-radius:13px;padding:13px 14px;margin-top:9px;font-size:14px;
+    display:flex;align-items:center;gap:11px;font-weight:500}
+  .opt .k{font-family:var(--mono);font-weight:700;color:var(--ink-3);width:20px;height:20px;border:1.5px solid var(--line);
+    border-radius:6px;display:grid;place-items:center;font-size:11px;flex:none}
+  .opt.pick{border-color:var(--brand);background:var(--brand-wash)}
+  .opt.pick .k{background:var(--brand);border-color:var(--brand);color:#1b1305}
+
+  /* handoff / lock */
+  .handoff{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;
+    padding:0 30px;background:radial-gradient(120% 80% at 50% 0,var(--brand-wash),transparent 60%)}
+  .bigmark{width:74px;height:74px;border-radius:22px;background:var(--brand);color:#1b1305;display:grid;place-items:center;
+    font-family:var(--serif);font-size:34px;font-weight:700;margin-bottom:8px}
+  .handoff .hh{font-family:var(--serif);font-size:24px;font-weight:600;margin:14px 0 0}
+  .handoff .hp{color:var(--ink-2);font-size:14px;margin:8px 0 0}
+  .metae{display:inline-flex;gap:7px;margin-top:16px;font-family:var(--mono);font-size:11px;color:var(--ink-2);
+    border:1px solid var(--line);border-radius:999px;padding:7px 13px;background:var(--card)}
+
+  /* done screen */
+  .done{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:0 26px;gap:2px}
+  .tick{width:64px;height:64px;border-radius:50%;background:var(--good-wash);border:2px solid var(--good);
+    display:grid;place-items:center;color:var(--good);font-size:30px;font-weight:700;margin-bottom:6px}
+
+  /* whatsapp */
+  .wa{flex:1;display:flex;flex-direction:column;background:var(--wa-bg)}
+  .wa-hd{background:var(--wa-head);color:#fff;display:flex;align-items:center;gap:11px;padding:10px 14px}
+  .wa-hd .av{width:34px;height:34px;border-radius:50%;background:var(--brand);color:#1b1305;display:grid;place-items:center;
+    font-weight:800;font-size:14px;flex:none}
+  .wa-hd .nm{font-weight:600;font-size:14px}
+  .wa-hd .on{font-size:11px;opacity:.8}
+  .wa-body{flex:1;overflow-y:auto;padding:14px 12px;display:flex;flex-direction:column;gap:9px}
+  .wa-body::-webkit-scrollbar{width:0}
+  .bub{max-width:82%;padding:9px 11px;border-radius:12px;font-size:13px;line-height:1.4;position:relative;box-shadow:0 1px 1px rgba(0,0,0,.08)}
+  .bub.in{background:var(--wa-in);color:var(--ink);align-self:flex-start;border-top-left-radius:3px}
+  .bub.out{background:var(--wa-out);color:var(--ink);align-self:flex-end;border-top-right-radius:3px}
+  .bub .tm{font-family:var(--mono);font-size:9px;color:var(--ink-3);text-align:right;margin-top:3px}
+  .wacard{background:var(--wa-in);border-radius:12px;overflow:hidden;align-self:flex-start;max-width:88%;
+    box-shadow:0 1px 2px rgba(0,0,0,.12)}
+  .wacard .top{background:var(--ink);color:var(--paper);padding:11px 13px}
+  .wacard .top .kk{font-family:var(--mono);font-size:9px;letter-spacing:.14em;opacity:.7;text-transform:uppercase}
+  .wacard .top .tt{font-family:var(--serif);font-size:15px;font-weight:600;margin-top:2px}
+  .wacard .mid{padding:12px 13px}
+  .wacard .score{display:flex;align-items:center;gap:12px}
+  .miniring{width:52px;height:52px;border-radius:50%;flex:none;display:grid;place-items:center;
+    background:conic-gradient(var(--watch) 68%,var(--line-2) 0)}
+  .miniring::before{content:"";position:absolute;width:38px;height:38px;border-radius:50%;background:var(--wa-in)}
+  .miniring b{position:relative;font-family:var(--mono);font-size:14px;font-weight:700}
+  .wacard .mid p{font-size:12px;margin:9px 0 0;line-height:1.35;color:var(--ink-2)}
+  .wacard .cta{border-top:1px solid var(--line);text-align:center;padding:10px;color:var(--good);font-weight:700;font-size:13px}
+  .wa-input{background:var(--wa-head);opacity:.92;padding:9px 12px;display:flex;gap:9px;align-items:center}
+  .wa-input .box{flex:1;background:var(--card);border-radius:999px;height:34px;display:flex;align-items:center;padding:0 14px;
+    color:var(--ink-3);font-size:12px}
+
+  /* consent screen bits */
+  .consent-item{display:flex;gap:11px;padding:11px 0;border-bottom:1px solid var(--line);font-size:13px;color:var(--ink-2)}
+  .consent-item:last-child{border:0}
+  .check{width:22px;height:22px;border-radius:7px;border:2px solid var(--good);background:var(--good-wash);color:var(--good);
+    display:grid;place-items:center;flex:none;font-weight:800;font-size:12px}
+  .legalbox{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;font-size:11.5px;color:var(--ink-3);line-height:1.5}
+
+  /* plans */
+  .plan{border:1.5px solid var(--line);border-radius:16px;padding:15px;margin-top:12px;position:relative;background:var(--card)}
+  .plan.best{border-color:var(--brand);box-shadow:0 0 0 3px var(--brand-wash)}
+  .plan .flag{position:absolute;top:-10px;left:15px;background:var(--brand);color:#1b1305;font-family:var(--mono);
+    font-size:9px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;padding:3px 9px;border-radius:6px}
+  .plan .pn{font-weight:700;font-size:14px}
+  .plan .pp{font-family:var(--serif);font-size:24px;font-weight:600;margin:4px 0}
+  .plan .pp small{font-family:var(--sans);font-size:12px;color:var(--ink-3);font-weight:400}
+  .plan ul{margin:8px 0 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px}
+  .plan li{font-size:12px;color:var(--ink-2);display:flex;gap:8px}
+  .plan li::before{content:"✓";color:var(--good);font-weight:800}
+
+  /* annotation notes */
+  .notes{width:300px;margin-top:18px}
+  .notes .cap{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--brand-deep);font-weight:600}
+  .notes h5{font-family:var(--serif);font-size:17px;font-weight:600;margin:6px 0 8px;letter-spacing:-.01em}
+  .notes ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px}
+  .notes li{font-size:12.5px;color:var(--ink-2);line-height:1.45;padding-left:16px;position:relative}
+  .notes li::before{content:"";position:absolute;left:0;top:7px;width:6px;height:6px;border-radius:50%;background:var(--brand)}
+  .notes li b{color:var(--ink);font-weight:600}
+
+  footer{border-top:1px solid var(--line);margin-top:64px;padding:40px 0 80px;color:var(--ink-3);font-size:13px}
+  footer b{color:var(--ink)}
+  .foot-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:22px;margin-top:22px}
+  .foot-grid h6{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--brand-deep);margin:0 0 8px}
+  .foot-grid p{margin:0;font-size:12.5px;color:var(--ink-2);line-height:1.5}
+
+  @media (max-width:520px){
+    .phone{width:280px} .notes{width:280px}
+    header.top{padding:48px 0 28px}
+  }
+  @media (prefers-reduced-motion:no-preference){
+    .plate{animation:rise .5s cubic-bezier(.2,.7,.2,1) both}
+  }
+  @keyframes rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+</style>
+
+<div class="wrap">
+
+  <header class="top">
+    <div class="seal"><b>P</b> ParentProof · Product Design v1.0 · July 2026</div>
+    <h1 class="title">Fourteen screens that turn a parent's anxiety into <em>independent proof.</em></h1>
+    <p class="lede">This is the full screen-by-screen design for ParentProof — the independent learning-audit app. The guiding principle: it must never feel like another edtech app selling teaching. It should feel like a <b>credible, calm report from a neutral referee</b> — warm enough for an anxious parent, rigorous enough to be believed.</p>
+    <div class="posit">
+      <div class="en">"You pay for their education. We prove whether it's working."</div>
+      <div class="hi">Fees aap bharte ho. Report hum dete hain — asli wali.</div>
+    </div>
+
+    <div class="legend">
+      <div class="lcard">
+        <h4>Palette</h4>
+        <div class="swatches">
+          <div class="sw"><i style="background:#15233C"></i>Ink</div>
+          <div class="sw"><i style="background:#E39A16"></i>Seal</div>
+          <div class="sw"><i style="background:#1E9E73"></i>On&nbsp;track</div>
+          <div class="sw"><i style="background:#C77D18"></i>Watch</div>
+          <div class="sw"><i style="background:#C6472E"></i>Gap</div>
+          <div class="sw"><i style="background:#EEF1F5"></i>Paper</div>
+        </div>
+        <p class="sub" style="margin-top:13px;font-size:12px">Marigold is the <b>seal of verification</b> — used only for brand &amp; proof, never for status. Readiness has its own traffic system.</p>
+      </div>
+      <div class="lcard">
+        <h4>Type roles</h4>
+        <div class="typerow">
+          <div><span style="font-family:var(--serif);font-size:18px">Independent Report</span><small>SERIF · documents</small></div>
+          <div><span style="font-size:14px;font-weight:600">Take the test</span><small>SANS · app chrome</small></div>
+          <div><span style="font-family:var(--mono);font-size:14px">68%&nbsp;·&nbsp;20&nbsp;Jul</span><small>MONO · scores</small></div>
+        </div>
+      </div>
+      <div class="lcard">
+        <h4>Readiness states</h4>
+        <div class="states">
+          <div class="st"><span class="dot good"></span> <b style="color:var(--good)">On&nbsp;track</b>&nbsp;— at/above syllabus expectation</div>
+          <div class="st"><span class="dot watch"></span> <b style="color:var(--watch)">Watch</b>&nbsp;— memorized, not understood</div>
+          <div class="st"><span class="dot risk"></span> <b style="color:var(--risk)">Gap</b>&nbsp;— falling behind, needs a fix</div>
+        </div>
+      </div>
+      <div class="lcard">
+        <h4>Three surfaces</h4>
+        <div class="surfaces">
+          <div class="surf"><b>Parent</b> The customer. Owns the account, reads every report, makes decisions.</div>
+          <div class="surf"><b>Child</b> The test-taker only. Minimal, timed, handed the phone for 10 minutes.</div>
+          <div class="surf"><b>WhatsApp</b> Where reports are delivered &amp; shared — no new app habit required.</div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ============ FLOW 1 ============ -->
+  <section class="flow">
+    <div class="flow-head">
+      <div class="flow-num">01</div>
+      <div>
+        <h2>Onboarding &amp; Consent</h2>
+        <p>Establish the positioning in the first 10 seconds, get DPDP-compliant parental consent as a native first step (not an afterthought), and pin the child to an exact syllabus position — the thing that makes every later test credible.</p>
+      </div>
+    </div>
+
+    <div class="gallery">
+
+      <!-- 1: Welcome -->
+      <div class="plate">
+        <div class="phone"><div class="screen">
+          <div class="sb"><span>9:41</span><span class="r"><span class="bar"><i style="height:4px"></i><i style="height:6px"></i><i style="height:8px"></i><i style="height:10px"></i></span><span>5G</span><span class="bat"><i></i></span></span></div>
+          <div class="view"><div class="pad">
+            <div style="display:flex;justify-content:center;margin:22px 0 4px"><div class="bigmark">P</div></div>
+            <div style="text-align:center"><div class="kicker">The independent learning audit</div></div>
+            <h3 class="sh" style="text-align:center">You pay for their education.<br>We prove it's working.</h3>
+            <p class="sub" style="text-align:center;margin-top:8px">Every report you get today comes from someone you pay. We're the one who doesn't teach your child — so we can tell you the truth.</p>
+            <div class="card" style="margin-top:18px;display:flex;gap:12px;align-items:center">
+              <span class="pill watch" style="flex:none">Independent</span>
+              <p class="sub" style="margin:0;font-size:12px">We never sell classes or tuition. We only measure.</p>
+            </div>
+            <div class="btn-row">
+              <button class="btn brand">Start your free 7-day audit</button>
+              <button class="btn ghost">I already have an account</button>
+            </div>
+            <p class="sub" style="text-align:center;font-size:11px;margin-top:12px;color:var(--ink-3)">No card needed · 3 free tests · 1 full report</p>
+          </div></div>
+        </div></div>
+        <div class="notes">
+          <div class="cap">Screen 01 · Welcome</div>
+          <h5>The thesis, not a feature list</h5>
+          <ul>
+            <li>The headline <b>is</b> the positioning. No "learn faster" edtech promise — the opposite.</li>
+            <li>The "Independent" badge does the heavy lifting: it pre-empts the "aren't you just another app?" reflex.</li>
+            <li>CTA is the <b>free audit</b> (the hook from the plan), framed as zero-risk — no card, no loan, post-Byju's trust.</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- 2: Consent -->
+      <div class="plate">
+        <div class="phone"><div class="screen">
+          <div class="sb"><span>9:41</span><span class="r"><span class="bar"><i style="height:4px"></i><i style="height:6px"></i><i style="height:8px"></i><i style="height:10px"></i></span><span>5G</span><span class="bat"><i></i></span></span></div>
+          <div class="view"><div class="pad">
+            <div class="kicker" style="margin-top:8px">Step 1 of 3 · Required by law</div>
+            <h3 class="sh">You're the account owner</h3>
+            <p class="sub">Your child's data belongs to you. Under India's DPDP Act, only a verified parent can create this account — and delete it, any time.</p>
+            <div class="card" style="margin-top:16px;padding:6px 15px">
+              <div class="consent-item"><span class="check">✓</span><div>I am <b style="color:var(--ink)">Aarav's parent / legal guardian</b> and consent to this audit.</div></div>
+              <div class="consent-item"><span class="check">✓</span><div>Tests are <b style="color:var(--ink)">supervised by me</b> on my phone.</div></div>
+              <div class="consent-item"><span class="check">✓</span><div>I can <b style="color:var(--ink)">export or erase</b> all data with one tap.</div></div>
+            </div>
+            <div class="legalbox" style="margin-top:12px">We collect only what's needed to measure learning: class, board, test answers. No ads to your child. No selling identifiable data. <span style="color:var(--brand-deep);font-weight:600">Read the plain-language policy →</span></div>
+            <div class="field" style="margin-top:12px"><small>Verify via</small><div class="val">📱 OTP to +91 98••• ••210</div></div>
+            <div class="btn-row"><button class="btn">Agree &amp; verify — continue</button></div>
+          </div></div>
+        </div></div>
+        <div class="notes">
+          <div class="cap">Screen 02 · Consent (DPDP)</div>
+          <h5>Consent as trust, not friction</h5>
+          <ul>
+            <li>The pre-mortem names DPDP as a company-killer. So consent is <b>step one</b>, framed as a benefit ("your data belongs to you"), not fine print.</li>
+            <li>"Parent-as-owner" is the native legal structure — it's stated out loud because it doubles as the <b>positioning</b>.</li>
+            <li>One-tap export/erase is promised up front — the opposite of Byju's lock-in.</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- 3: Add child -->
+      <div class="plate">
+        <div class="phone"><div class="screen">
+          <div class="sb"><span>9:41</span><span class="r"><span class="bar"><i style="height:4px"></i><i style="height:6px"></i><i style="height:8px"></i><i style="height:10px"></i></span><span>5G</span><span class="bat"><i></i></span></span></div>
+          <div class="view"><div class="pad">
+            <div class="kicker" style="margin-top:8px">Step 2 of 3 · Who are we auditing?</div>
+            <h3 class="sh">Tell us about your child</h3>
+            <p class="sub">We map every test to their exact syllabus — so accuracy starts here.</p>
+            <div class="field"><small>Child's name</small><div class="val">Aarav Sharma</div></div>
+            <div class="field sel"><small>Board</small><div class="val">CBSE ▾</div></div>
+            <div style="display:flex;gap:10px">
+              <div class="field" style="flex:1"><small>Class</small><div class="val">Class 8 ▾</div></div>
+              <div class="field" style="flex:1"><small>Section</small><div class="val">8-C ▾</div></div>
+            </div>
+            <div class="field"><small>School (optional — improves accuracy)</small><div class="val">DPS, R.K. Puram</div></div>
+            <div class="card" style="margin-top:12px;display:flex;gap:10px;align-items:flex-start;background:var(--brand-wash);border-color:var(--brand)">
+              <span style="font-weight:800;color:var(--brand-deep)">i</span>
+              <p class="sub" style="margin:0;font-size:11.5px;color:var(--brand-deep)">Adding the school lets us calibrate to <b>your school's actual pace</b> — a key part of prediction accuracy.</p>
+            </div>
+            <div class="btn-row"><button class="btn">Continue</button></div>
+          </div></div>
+        </div></div>
+        <div class="notes">
+          <div class="cap">Screen 03 · Add child</div>
+          <h5>Board + class + school = the graph</h5>
+          <ul>
+            <li>These three fields feed the <b>syllabus-calendar graph</b> — the proprietary operational moat from the plan.</li>
+            <li>School is optional but the app <b>sells why it helps</b>: per-school calibration is what keeps predictions honest.</li>
+            <li>CBSE is pre-selected — the beachhead board. One board, one city, maximum density.</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- 4: Syllabus position -->
+      <div class="plate">
+        <div class="phone"><div class="screen">
+          <div class="sb"><span>9:41</span><span class="r"><span class="bar"><i style="height:4px"></i><i style="height:6px"></i><i style="height:8px"></i><i style="height:10px"></i></span><span>5G</span><span class="bat"><i></i></span></span></div>
+          <div class="view"><div class="pad">
+            <div class="kicker" style="margin-top:8px">Step 3 of 3 · Where are they now?</div>
+            <h3 class="sh">Confirm the syllabus position</h3>
+            <p class="sub">By <b style="color:var(--ink)">20 July</b>, a Class 8 CBSE student should have covered:</p>
+            <div class="card" style="margin-top:12px;padding:8px 15px">
+              <div class="consent-item"><span class="check">✓</span><div><b style="color:var(--ink)">Maths</b> — Rational Numbers, Linear Equations</div></div>
+              <div class="consent-item"><span class="check">✓</span><div><b style="color:var(--ink)">Science</b> — Crop Production, Microorganisms, Coal &amp; Petroleum</div></div>
+            </div>
+            <p class="sub" style="margin-top:14px">Is your class roughly here? Slide to adjust if your school is ahead or behind.</p>
+            <div class="barline" style="margin-top:8px">
+              <div class="lab"><span>Behind</span><b style="color:var(--brand-deep)">On pace</b><span>Ahead</span></div>
+              <div class="track"><i style="width:52%;background:var(--brand)"></i></div>
+            </div>
+            <div class="card" style="margin-top:14px;text-align:center">
+              <div class="kicker">First audit scheduled</div>
+              <div style="font-family:var(--serif);font-size:18px;font-weight:600;margin-top:4px">Tonight, after dinner · 10 min</div>
+            </div>
+            <div class="btn-row"><button class="btn brand">Set up Aarav's first test</button></div>
+          </div></div>
+        </div></div>
+        <div class="notes">
+          <div class="cap">Screen 04 · Syllabus position</div>
+          <h5>The credibility anchor</h5>
+          <ul>
+            <li>This screen is <b>why the audit is believable</b>: it shows the app already knows what "on pace" means for this exact date &amp; class.</li>
+            <li>The slider crowdsources real pace data (schools run ahead/behind) — feeding the moat back.</li>
+            <li>Ends by scheduling the ritual — <b>"tonight, after dinner"</b> — turning intent into a concrete moment.</li>
+          </ul>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ============ FLOW 2 ============ -->
+  <section class="flow">
+    <div class="flow-head">
+      <div class="flow-num">02</div>
+      <div>
+        <h2>The Test</h2>
+        <p>The one fragile moment in the whole business — a 13-year-old actually taking a test his parent imposed. Design goal: make it feel short, fair, and low-stakes for the child, while quietly capturing whether each answer is <em>memorized or understood</em>. Ten minutes, hard cap.</p>
+      </div>
+    </div>
+
+    <div class="gallery">
+
+      <!-- 5: Handoff -->
+      <div class="plate">
+        <div class="phone"><div class="screen">
+          <div class="sb"><span>8:32</span><span class="r"><span class="bar"><i style="height:4px"></i><i style="height:6px"></i><i style="height:8px"></i><i style="height:10px"></i></span><span>5G</span><span class="bat"><i></i></span></span></div>
+          <div class="handoff">
+            <div class="bigmark">P</div>
+            <div class="hh">Hand the phone to Aarav</div>
+            <div class="hp">"Beta, aaj ka test de do — bas 10 minute."</div>
+            <div class="metae">📘 Class 8 · Maths &amp; Science · 9 questions</div>
+            <div class="metae" style="margin-top:8px">⏱ One sitting · timer starts on tap</div>
+            <div style="margin-top:24px;width:100%"><button class="btn brand">I'm Aarav — start my test</button></div>
+            <p class="sub" style="font-size:11px;margin-top:14px;color:var(--ink-3)">Parent stays nearby. This is a supervised ritual, not a solo exam.</p>
+          </div>
+        </div></div>
+        <div class="notes">
+          <div class="cap">Screen 05 · Handoff</div>
+          <h5>A ritual, framed for the kid</h5>
+          <ul>
+            <li>The hand-off screen literally scripts the parent line — <b>"aaj ka test de do"</b> — turning a chore into a repeatable ritual.</li>
+            <li>Reassures the <b>child</b>: only 10 minutes, 9 questions. Low stakes reduces refusal (the #1 kill-risk).</li>
+            <li>Supervision is stated as normal, which also deters cheating without feeling like surveillance.</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- 6: Question -->
+      <div class="plate">
+        <div class="phone"><div class="screen">
+          <div class="sb"><span>8:34</span><span class="r"><span class="bar"><i style="height:4px"></i><i style="height:6px"></i><i style="height:8px"></i><i style="height:10px"></i></span><span>5G</span><span class="bat"><i></i></span></span></div>
+          <div class="qwrap" style="padding-top:6px">
+            <div class="qtop">
+              <span class="chip understand">Understand</span>
+              <span class="qtimer">6:12</span>
+            </div>
+            <div class="qprog"><i style="width:44%"></i></div>
+          </div>
+          <div class="view"><div class="qwrap">
+            <div class="kicker">Question 4 of 9 · Maths · Linear Equations</div>
+            <div class="qtext">Riya solved 2x + 6 = 14 and got x = 4. Her friend says she can check without re-solving. What should she do?</div>
+            <div class="qsub">This isn't asking you to solve — it's asking whether you know <b>why</b> the method works.</div>
+            <div class="opt"><span class="k">A</span> Solve it again more carefully</div>
+            <div class="opt pick"><span class="k">B</span> Put x = 4 back in: 2(4)+6 should equal 14</div>
+            <div class="opt"><span class="k">C</span> Ask the teacher tomorrow</div>
+            <div class="opt"><span class="k">D</span> It can't be checked once solved</div>
+            <div class="btn-row" style="margin:16px 0 20px"><button class="btn">Next question →</button></div>
+          </div></div>
+        </div></div>
+        <div class="notes">
+          <div class="cap">Screen 06 · Question</div>
+          <h5>Where memorized ≠ understood is caught</h5>
+          <ul>
+            <li>Every question is tagged <b>Recall / Understand / Apply</b> — visible to the child as a subtle signal, and the core of the diagnosis.</li>
+            <li>This "Understand" item can't be beaten by rote — a kid who memorized steps but not <b>why</b> picks A. That's the exact signal parents pay for.</li>
+            <li>Timer + one-sitting + no back-Googling (distinct from a homework app) protects data quality.</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- 7: Done -->
+      <div class="plate">
+        <div class="phone"><div class="screen">
+          <div class="sb"><span>8:41</span><span class="r"><span class="bar"><i style="height:4px"></i><i style="height:6px"></i><i style="height:8px"></i><i style="height:10px"></i></span><span>5G</span><span class="bat"><i></i></span></span></div>
+          <div class="done">
+            <div class="tick">✓</div>
+            <h3 class="sh">Done, Aarav — nicely done.</h3>
+            <p class="sub">9 of 9 answered in 8 min 40 sec. Your streak is now <b style="color:var(--brand-deep)">3 weeks 🔥</b></p>
+            <div class="card" style="margin-top:16px;width:100%;text-align:left;display:flex;gap:11px;align-items:center">
+              <div class="subj-ic" style="background:var(--good-wash);color:var(--good)">↑</div>
+              <div><b style="font-size:13px">You beat last week on Science</b><p class="sub" style="margin:2px 0 0;font-size:11.5px">Keep this up and parents stay off your back 😄</p></div>
+            </div>
+            <div style="margin-top:18px;width:100%"><button class="btn">Give the phone back to Mumma</button></div>
+            <p class="sub" style="font-size:11px;margin-top:12px;color:var(--ink-3)">Her report is being prepared privately.</p>
+          </div>
+        </div></div>
+        <div class="notes">
+          <div class="cap">Screen 07 · Test complete</div>
+          <h5>Reward the kid, protect the report</h5>
+          <ul>
+            <li>The child sees <b>encouragement + a streak</b> — the incentive that keeps weekly completion above the 40% survival line.</li>
+            <li>Framing "parents stay off your back" speaks the kid's actual motivation, honestly.</li>
+            <li>Crucially, the <b>diagnosis is NOT shown to the child</b> — it's the parent's report. The hand-back line re-establishes ownership.</li>
+          </ul>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ============ FLOW 3 ============ -->
+  <section class="flow">
+    <div class="flow-head">
+      <div class="flow-num">03</div>
+      <div>
+        <h2>The Reports</h2>
+        <p>The product. Everything else exists to produce these artifacts. They must read like an <em>independent audit</em> — serif, stamped, evidence-first — and every diagnosis must ship with a fix, so we're never a pure anxiety machine. This is where a parent decides we're worth ₹1,799.</p>
+      </div>
+    </div>
+
+    <div class="gallery">
+
+      <!-- 8: Diagnosis card -->
+      <div class="plate">
+        <div class="phone"><div class="screen">
+          <div class="sb"><span>9:05</span><span class="r"><span class="bar"><i style="height:4px"></i><i style="height:6px"></i><i style="height:8px"></i><i style="height:10px"></i></span><span>5G</span><span class="bat"><i></i></span></span></div>
+          <div class="view">
+            <div class="appbar"><div class="brandmark"><b>P</b> Diagnosis Card</div><span class="kicker">20 Jul</span></div>
+            <div class="pad" style="padding-top:0">
+              <div class="doc">
+                <div class="doc-hd">
+                  <div class="stamp">INDEPENDENT<br>AUDIT</div>
+                  <div class="t">Aarav — Maths</div>
+                  <div class="m">Class 8 CBSE · Linear Equations · Week 3</div>
+                </div>
+                <div class="doc-bd">
+                  <div style="display:flex;align-items:center;gap:14px">
+                    <div class="ring" style="--v:68;--rc:var(--watch);width:96px;height:96px"><div class="rv"><b style="font-size:24px">68</b><small>Ready</small></div></div>
+                    <div>
+                      <span class="pill watch">Watch · memorized</span>
+                      <p class="lead" style="margin-top:8px;font-size:14px">He can <b>get the answers</b>. He can't yet explain <b>why</b> the method works.</p>
+                    </div>
+                  </div>
+                  <div class="vs">
+                    <div class="box und"><small>✓ Truly understands</small><p>Solving for x by moving terms — 5 of 5 correct.</p></div>
+                    <div class="box mem"><small>✕ Memorized only</small><p>Checking a solution &amp; the idea of "balancing" — 1 of 4.</p></div>
+                  </div>
+                  <div class="gap"><b>The specific gap:</b> Aarav treats equations as steps to copy, not a balance to keep equal. He'll break on any question worded differently from the textbook.</div>
+                  <div class="btn-row" style="margin-top:14px">
+                    <button class="btn brand">See the 3-day fix plan</button>
+                    <button class="btn ghost">Share this card</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="tabbar">
+            <div class="tab on"><span class="ic"></span>Reports</div>
+            <div class="tab"><span class="ic"></span>Progress</div>
+            <div class="tab"><span class="ic"></span>Fix plan</div>
+            <div class="tab"><span class="ic"></span>Aarav</div>
+          </div>
+        </div></div>
+        <div class="notes">
+          <div class="cap">Screen 08 · Diagnosis Card</div>
+          <h5>The killer artifact</h5>
+          <ul>
+            <li>Designed as a <b>document</b>, not a dashboard: serif title, "Independent Audit" stamp, a readiness score with a clear verdict.</li>
+            <li>The <b>Understands vs Memorized</b> split is the whole value prop made visible — the thing no school report ever tells a parent.</li>
+            <li>One plain-language <b>specific gap</b> sentence — never just a number. And it's the artifact a parent can put in front of a tuition teacher: <em>"Explain this."</em></li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- 9: Fix plan -->
+      <div class="plate">
+        <div class="phone"><div class="screen">
+          <div class="sb"><span>9:06</span><span class="r"><span class="bar"><i style="height:4px"></i><i style="height:6px"></i><i style="height:8px"></i><i style="height:10px"></i></span><span>5G</span><span class="bat"><i></i></span></span></div>
+          <div class="view">
+            <div class="appbar"><div class="brandmark"><b>P</b> The Fix</div><span class="kicker">3-day plan</span></div>
+            <div class="pad" style="padding-top:0">
+              <h3 class="sh" style="margin-top:0">Close the "why" gap in Maths</h3>
+              <p class="sub">15 min/day for 3 days, then we re-test to prove it worked.</p>
+              <div class="card" style="margin-top:12px;padding:6px 15px">
+                <div class="rx">
+                  <div class="step"><span class="n">1</span><div class="c"><b>Watch: "Equations are a see-saw" (4 min)</b><p>A free NCERT-aligned clip, hand-picked. We don't make you buy a course.</p></div></div>
+                  <div class="step"><span class="n">2</span><div class="c"><b>Do: 3 balance-check problems</b><p>Each asks "is this still equal?" — building the concept, not more drilling.</p></div></div>
+                  <div class="step"><span class="n">3</span><div class="c"><b>Re-test: 4 fresh questions</b><p>Auto-scheduled for Wednesday. We verify the fix actually landed.</p></div></div>
+                </div>
+              </div>
+              <div class="script">
+                <small>★ Ask Aarav tonight</small>
+                <p>"If I add 5 to only one side of an equation, is it still true? Why not?"</p>
+              </div>
+              <p class="sub" style="font-size:11px;margin-top:10px;color:var(--ink-3)">This one question tells you more than a month of "homework done?"</p>
+              <div class="btn-row"><button class="btn brand">Start Day 1</button></div>
+            </div>
+          </div>
+          <div class="tabbar">
+            <div class="tab"><span class="ic"></span>Reports</div>
+            <div class="tab"><span class="ic"></span>Progress</div>
+            <div class="tab on"><span class="ic"></span>Fix plan</div>
+            <div class="tab"><span class="ic"></span>Aarav</div>
+          </div>
+        </div></div>
+        <div class="notes">
+          <div class="cap">Screen 09 · Prescription</div>
+          <h5>Never anxiety without a fix</h5>
+          <ul>
+            <li>Directly answers kill-risk #2: every diagnosis <b>ships with a plan</b>, so we're a fixing product, not a scaring one.</li>
+            <li>Content is <b>curated free clips + our explanation</b> — we monetize measurement, never teaching. Positioning stays intact.</li>
+            <li>The <b>"ask your child tonight" script</b> gives the parent agency in their own words — and a scheduled re-test proves the fix worked in 7 days.</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- 10: Trust dashboard -->
+      <div class="plate">
+        <div class="phone"><div class="screen">
+          <div class="sb"><span>9:08</span><span class="r"><span class="bar"><i style="height:4px"></i><i style="height:6px"></i><i style="height:8px"></i><i style="height:10px"></i></span><span>5G</span><span class="bat"><i></i></span></span></div>
+          <div class="view">
+            <div class="appbar"><div class="brandmark"><b>P</b> Aarav's Ledger</div><span class="kicker">Yr 2026-27</span></div>
+            <div class="pad" style="padding-top:0">
+              <div class="card" style="display:flex;justify-content:space-between;text-align:center">
+                <div><div class="ring" style="--v:71;--rc:var(--good);width:70px;height:70px"><div class="rv"><b style="font-size:19px">71</b></div></div><div class="kicker" style="margin-top:4px">Overall</div></div>
+                <div style="align-self:center;text-align:left"><div class="metaline" style="font-size:11px">VELOCITY</div><div style="font-family:var(--serif);font-size:20px;font-weight:600;color:var(--good)">↗ Improving</div><p class="sub" style="font-size:11px;margin:2px 0 0">+9 pts over 6 weeks</p></div>
+              </div>
+              <div style="font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);margin:16px 0 2px">By subject</div>
+              <div class="rowitem">
+                <div class="l"><div class="subj-ic" style="background:var(--brand-wash);color:var(--brand-deep)">M</div><div><b style="font-size:13px">Maths</b><div class="metaline">68% · Linear Eqns</div></div></div>
+                <svg class="spark" viewBox="0 0 60 26"><polyline points="0,20 12,18 24,19 36,12 48,13 60,8" fill="none" stroke="var(--good)" stroke-width="2"/></svg>
+                <span class="pill watch">Watch</span>
+              </div>
+              <div class="rowitem">
+                <div class="l"><div class="subj-ic" style="background:#e7edfb;color:#3457a8">S</div><div><b style="font-size:13px">Science</b><div class="metaline">79% · Microorganisms</div></div></div>
+                <svg class="spark" viewBox="0 0 60 26"><polyline points="0,16 12,14 24,10 36,11 48,7 60,5" fill="none" stroke="var(--good)" stroke-width="2"/></svg>
+                <span class="pill good">On track</span>
+              </div>
+              <div class="rowitem">
+                <div class="l"><div class="subj-ic" style="background:var(--risk-wash);color:var(--risk)">G</div><div><b style="font-size:13px">Geometry unit</b><div class="metaline">54% · Quadrilaterals</div></div></div>
+                <svg class="spark" viewBox="0 0 60 26"><polyline points="0,10 12,12 24,14 36,13 48,17 60,19" fill="none" stroke="var(--risk)" stroke-width="2"/></svg>
+                <span class="pill risk">Gap</span>
+              </div>
+            </div>
+          </div>
+          <div class="tabbar">
+            <div class="tab"><span class="ic"></span>Reports</div>
+            <div class="tab on"><span class="ic"></span>Progress</div>
+            <div class="tab"><span class="ic"></span>Fix plan</div>
+            <div class="tab"><span class="ic"></span>Aarav</div>
+          </div>
+        </div></div>
+        <div class="notes">
+          <div class="cap">Screen 10 · Trust Dashboard</div>
+          <h5>The un-copyable ledger</h5>
+          <ul>
+            <li>The <b>12-month history</b> is the real moat — a new entrant can't reproduce it, and abandoning it means losing the child's record.</li>
+            <li>Velocity (improving / flat / declining) matters more to a parent than any single score — so it's the hero metric.</li>
+            <li>Sparklines + a strict 3-state pill system make the whole year <b>scannable in two seconds</b>, with the one "Gap" subject impossible to miss.</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- 11: Term audit / ROI -->
+      <div class="plate">
+        <div class="phone"><div class="screen">
+          <div class="sb"><span>9:10</span><span class="r"><span class="bar"><i style="height:4px"></i><i style="height:6px"></i><i style="height:8px"></i><i style="height:10px"></i></span><span>5G</span><span class="bat"><i></i></span></span></div>
+          <div class="view">
+            <div class="appbar"><div class="brandmark"><b>P</b> Term Audit</div><span class="kicker">Jul–Sep</span></div>
+            <div class="pad" style="padding-top:0">
+              <div class="roi">
+                <div class="k">The question no one else answers</div>
+                <div class="big">Is your <em>₹4,500/mo</em> tuition working?</div>
+                <p>Since Aarav started tuition in May, his understood-score rose <b style="color:var(--brand)">+6 pts</b> — but only in topics the tuition covers. The gap it was hired to fix (Geometry) is <b style="color:var(--brand)">flat</b>.</p>
+              </div>
+              <div class="card" style="margin-top:14px">
+                <div class="barline"><div class="lab"><span>Algebra (tuition covers)</span><b style="color:var(--good)">+11</b></div><div class="track"><i style="width:78%;background:var(--good)"></i></div></div>
+                <div class="barline"><div class="lab"><span>Geometry (why you hired them)</span><b style="color:var(--risk)">−2</b></div><div class="track"><i style="width:34%;background:var(--risk)"></i></div></div>
+              </div>
+              <div class="card" style="margin-top:12px;border-color:var(--brand);background:var(--brand-wash)">
+                <div class="kicker" style="color:var(--brand-deep)">What to do with this</div>
+                <p class="sub" style="margin-top:6px;font-size:12.5px;color:var(--ink)">Take this to Aarav's tuition teacher and ask: <b>"He's not improving in Geometry — what's the plan?"</b></p>
+              </div>
+              <div class="btn-row"><button class="btn ghost">Export as PDF</button></div>
+            </div>
+          </div>
+          <div class="tabbar">
+            <div class="tab on"><span class="ic"></span>Reports</div>
+            <div class="tab"><span class="ic"></span>Progress</div>
+            <div class="tab"><span class="ic"></span>Fix plan</div>
+            <div class="tab"><span class="ic"></span>Aarav</div>
+          </div>
+        </div></div>
+        <div class="notes">
+          <div class="cap">Screen 11 · Term Audit</div>
+          <h5>"Is my money working?" — answered</h5>
+          <ul>
+            <li>This is the screen that justifies renewal. It reframes the subscription as a way to <b>audit a ₹4,500/mo spend</b> — we cost a fraction of what we're checking.</li>
+            <li>It weaponizes independence: we can say the tuition <b>isn't</b> fixing what it was hired for — no incumbent can ever say that.</li>
+            <li>It hands the parent a <b>script + a PDF</b> to confront the seller. That confrontation is the product's word-of-mouth engine.</li>
+          </ul>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ============ FLOW 4 ============ -->
+  <section class="flow">
+    <div class="flow-head">
+      <div class="flow-num">04</div>
+      <div>
+        <h2>Trust Engine &amp; Account</h2>
+        <p>The proof-of-proof. The whole company lives or dies on one published stat — "our readiness score predicted the real exam within ±8%". These screens capture the ground-truth that makes that claim real, deliver reports where parents already live (WhatsApp), and convert at exactly the moment of realized value.</p>
+      </div>
+    </div>
+
+    <div class="gallery">
+
+      <!-- 12: Enter actual marks -->
+      <div class="plate">
+        <div class="phone"><div class="screen">
+          <div class="sb"><span>9:12</span><span class="r"><span class="bar"><i style="height:4px"></i><i style="height:6px"></i><i style="height:8px"></i><i style="height:10px"></i></span><span>5G</span><span class="bat"><i></i></span></span></div>
+          <div class="view"><div class="pad">
+            <div class="kicker" style="margin-top:8px">Prove us right (or wrong)</div>
+            <h3 class="sh">Aarav's mid-term result is out?</h3>
+            <p class="sub">Enter his real school marks. We'll show you how close our prediction was — and it makes every future report sharper.</p>
+            <div class="field sel" style="margin-top:14px"><small>Maths — actual school marks (out of 100)</small><div class="val" style="font-family:var(--mono)">64</div></div>
+            <div class="card" style="margin-top:16px">
+              <div class="kicker">Our prediction, made 2 weeks ago</div>
+              <div class="pva">
+                <div class="col"><small>We predicted</small><b>61–69</b></div>
+                <span class="eq">≈</span>
+                <div class="col"><small>Actual</small><b style="color:var(--good)">64</b></div>
+              </div>
+              <div class="pill good" style="margin-top:12px;width:100%;justify-content:center">✓ Within range — accurate to ±3 points</div>
+            </div>
+            <div class="legalbox" style="margin-top:12px;text-align:center">You've now helped verify <b style="color:var(--brand-deep)">1,284</b> predictions this term. Aggregate accuracy so far: <b style="color:var(--ink)">84% within ±8%</b>.</div>
+            <div class="btn-row"><button class="btn">Submit &amp; see accuracy</button></div>
+          </div></div>
+        </div></div>
+        <div class="notes">
+          <div class="cap">Screen 12 · Verify prediction</div>
+          <h5>The trust engine, made routine</h5>
+          <ul>
+            <li>This closes the loop that produces the <b>single most important number</b> in the company — published prediction accuracy.</li>
+            <li>Predictions are shown as <b>ranges, not points</b> (kill-risk #3) so we under-claim and stay credible.</li>
+            <li>Every submission feeds the public stat — the parent sees they're part of building the proof, which deepens buy-in.</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- 13: WhatsApp delivery -->
+      <div class="plate">
+        <div class="phone"><div class="screen">
+          <div class="sb" style="color:#fff;background:var(--wa-head)"><span>9:14</span><span class="r"><span class="bar"><i style="height:4px;background:#fff"></i><i style="height:6px;background:#fff"></i><i style="height:8px;background:#fff"></i><i style="height:10px;background:#fff"></i></span><span>5G</span><span class="bat" style="border-color:#fff"><i style="background:#fff"></i></span></span></div>
+          <div class="wa">
+            <div class="wa-hd"><div class="av">P</div><div><div class="nm">ParentProof</div><div class="on">online</div></div></div>
+            <div class="wa-body">
+              <div class="bub in">Aarav finished tonight's audit 👏 His card is ready.<div class="tm">9:06 pm</div></div>
+              <div class="wacard">
+                <div class="top"><div class="kk">Independent Diagnosis · 20 Jul</div><div class="tt">Aarav — Maths, Class 8</div></div>
+                <div class="mid">
+                  <div class="score">
+                    <div class="miniring"><b>68</b></div>
+                    <div><b style="font-size:12px;color:var(--watch)">Watch · memorized</b><p style="margin-top:2px">Gets answers, can't yet explain why. Gap: treats equations as steps, not balance.</p></div>
+                  </div>
+                </div>
+                <div class="cta">Open full card &amp; 3-day fix →</div>
+              </div>
+              <div class="bub in">💡 Ask him tonight: "If I add 5 to only one side, is it still true?"<div class="tm">9:06 pm</div></div>
+              <div class="bub out">Thank you! Sending this to my husband 🙏<div class="tm">9:12 pm ✓✓</div></div>
+            </div>
+            <div class="wa-input"><div class="box">Message</div></div>
+          </div>
+        </div></div>
+        <div class="notes">
+          <div class="cap">Screen 13 · WhatsApp delivery</div>
+          <h5>Ride the habit, don't build one</h5>
+          <ul>
+            <li>Reports land in <b>WhatsApp</b> — no new app habit demanded of the parent (the plan's distribution insight).</li>
+            <li>The card is <b>forwardable</b>: "sending to my husband" is the native, zero-CAC referral loop — parents comparing kids is native WhatsApp behavior.</li>
+            <li>The scary-but-true summary + the fix arrive together, so even the notification never feels like pure anxiety.</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- 14: Paywall -->
+      <div class="plate">
+        <div class="phone"><div class="screen">
+          <div class="sb"><span>9:16</span><span class="r"><span class="bar"><i style="height:4px"></i><i style="height:6px"></i><i style="height:8px"></i><i style="height:10px"></i></span><span>5G</span><span class="bat"><i></i></span></span></div>
+          <div class="view"><div class="pad">
+            <div class="kicker" style="margin-top:8px">Your free audit ends in 2 days</div>
+            <h3 class="sh">Keep proving it's working</h3>
+            <p class="sub">You've seen one real gap the school never told you. Renew to keep the weekly audit — and the year-long record.</p>
+
+            <div class="plan best">
+              <div class="flag">Best value</div>
+              <div class="pn">Annual</div>
+              <div class="pp">₹1,799 <small>/ year · ₹150/mo</small></div>
+              <ul><li>All subjects, weekly</li><li>Term audits &amp; board predictor</li><li>Full year ledger, kept forever</li></ul>
+            </div>
+            <div class="plan">
+              <div class="pn">Core</div>
+              <div class="pp">₹999 <small>/ 6 months</small></div>
+              <ul><li>2 subjects · weekly audit</li><li>Diagnosis cards + fix plans</li></ul>
+            </div>
+            <div class="card" style="margin-top:12px;display:flex;gap:10px;align-items:center">
+              <span style="font-family:var(--mono);font-size:11px;color:var(--brand-deep);font-weight:700">+₹499</span>
+              <p class="sub" style="margin:0;font-size:12px">Add a sibling — audit both children.</p>
+            </div>
+            <div class="btn-row"><button class="btn brand">Continue with Annual</button></div>
+            <p class="sub" style="text-align:center;font-size:11px;margin-top:10px;color:var(--ink-3)">Cancel anytime · export or erase data anytime</p>
+          </div></div>
+        </div></div>
+        <div class="notes">
+          <div class="cap">Screen 14 · Plans</div>
+          <h5>Convert at realized value</h5>
+          <ul>
+            <li>The paywall appears <b>after</b> the parent has seen a real gap — value first, price second. It references <em>that</em> discovery, not generic features.</li>
+            <li>Pricing mirrors the plan: Annual anchored as best value, Core as the entry, ₹499 sibling add-on.</li>
+            <li>"Cancel / erase anytime" repeated at the point of payment — trust is the brand, even in the checkout.</li>
+          </ul>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <footer>
+    <div class="wrap" style="padding:0">
+      <p style="max-width:70ch"><b>How these 14 screens hang together.</b> The design has one job on every screen: make an independent audit feel <b>credible and calm</b>, never like edtech. Serif documents + a verification stamp carry authority; a strict readiness traffic-system keeps status honest; and the marigold seal is spent only on brand and proof — never on decoration.</p>
+      <div class="foot-grid">
+        <div><h6>The spine</h6><p>Onboard &amp; consent → child takes a 10-min test → parent gets a stamped diagnosis + fix → the year-long ledger → verify the prediction → convert. Every loop feeds the moat.</p></div>
+        <div><h6>Designed against the pre-mortem</h6><p>Kid refusal (streaks, 10-min cap), anxiety-without-agency (fix always attached), prediction misses (ranges), and DPDP (consent-first) each have a screen answering them.</p></div>
+        <div><h6>Not built, on purpose</h6><p>No live classes, no gamified kid universe, no school-facing dashboard. The child sees only a test; the parent owns everything. Independence is the product.</p></div>
+      </div>
+      <p style="margin-top:26px;color:var(--ink-3);font-size:12px">ParentProof · working name · screen designs for v1 · a starting point, not a spec set in stone.</p>
+    </div>
+  </footer>
+
+</div>
