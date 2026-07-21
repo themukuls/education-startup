@@ -45,13 +45,39 @@ Tracker, Diagnosis Card, Home hero, and Term Audit all read from
 `src/engine/synthetic.ts` builds realistic event streams (improver / rusher /
 crammer / fader / cold-start) for tests and for seeding the demo.
 
-## What's next (LLM layer — Phase 2/3)
+## The LLM layer — question generation (`server/`)
 
-No backend yet. The next layer is two narrow LLM jobs behind a small server that
-holds the API key: **question generation** from syllabus position, and **prose
-rendering** of the engine's chosen insight (with a banned-words guardrail). Both
-are single `claude-opus-4-8` calls with structured outputs; the engine above
-stays the source of every number.
+A small Express backend holds the Anthropic key and exposes `POST
+/api/generate-test`. Given a syllabus position (board / class / subject /
+chapter) it:
+
+1. **Generates** items with `claude-opus-4-8` (adaptive thinking, high effort,
+   structured-output schema) — misconception-targeted distractors, R/U/A mix.
+2. **Verifies** every item with a second, independent blind pass that re-solves
+   the question and **drops any whose marked answer it can't confirm** — a
+   hallucinated answer key must never reach a child.
+3. **Validates** structurally (exactly 4 unique non-empty options, in-range
+   answer index, valid enums) via the shared guardrail in `src/shared/quiz.ts`.
+
+Without an API key the server runs in **mock mode** (returns the vetted static
+bank), so the whole app + integration path runs offline and in demos. The client
+(`src/api/quiz.ts`) calls the backend and **falls back to the static bank** on
+any failure, so a test always loads.
+
+```bash
+cp .env.example .env      # add ANTHROPIC_API_KEY for real generation (optional)
+npm run server            # API on :8787  (mock mode if no key)
+npm run dev               # web app on :5173, proxies /api → :8787
+```
+
+`npm test` covers both the engine (10) and the question guardrail (8).
+
+## What's next (Phase 3)
+
+**LLM prose rendering** of the engine's chosen insight — the Diagnosis Card /
+WhatsApp card text — under the template contract and a banned-words guardrail
+("careless", "lazy", "weak" → rejected). The engine still owns every number; the
+model only phrases the finding it was handed.
 
 ## Run it
 
