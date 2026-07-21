@@ -72,12 +72,34 @@ npm run dev               # web app on :5173, proxies /api → :8787
 
 `npm test` covers both the engine (10) and the question guardrail (8).
 
-## What's next (Phase 3)
+## The LLM layer — prose rendering (`POST /api/render-card`)
 
-**LLM prose rendering** of the engine's chosen insight — the Diagnosis Card /
-WhatsApp card text — under the template contract and a banned-words guardrail
-("careless", "lazy", "weak" → rejected). The engine still owns every number; the
-model only phrases the finding it was handed.
+The second LLM job turns the engine's **chosen** insight into a warm,
+parent-facing card. Given the engine's finding + evidence + action, it rewrites
+them under the template contract with `claude-opus-4-8`. The guardrail
+(`src/shared/card.ts` → `checkCard`) then enforces the design contract:
+
+- **No banned language** — trait / ability / shaming words (intelligent, smart,
+  IQ, lazy, careless, weak, behind, failing, …) are rejected as whole words.
+- **No invented numbers** — every figure in the copy must come from the
+  engine's input (plus 5/10/15 minute framing); the model can rephrase but
+  can't fabricate a statistic. The parent card keeps ≤2 numbers.
+
+On a violation it retries once, then **falls back to the engine's own copy** —
+which is safe by construction. Mock mode (no key) returns that same copy. So the
+insight card always renders, and a hallucinated claim can never reach a parent.
+
+`npm test` covers the engine (10), the question guardrail (8), and the language
+guardrail (7) — 25 tests.
+
+## What's next
+
+- **Real generation quality** — needs an `ANTHROPIC_API_KEY`; run a batch
+  through generate → verify and review accuracy (the metric the business lives
+  on).
+- **WhatsApp delivery** of the rendered card (the design's screen 13).
+- **Prediction vs. actual** — capture `parentEnteredMarks` (already in the event
+  schema) to publish the accuracy track record.
 
 ## Run it
 

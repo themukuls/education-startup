@@ -4,7 +4,9 @@
 import express from 'express'
 import cors from 'cors'
 import { generateTest, hasKey } from './generate.ts'
+import { renderCard } from './render.ts'
 import { toQuestions, type GenerateRequest } from '../src/shared/quiz.ts'
+import type { RenderRequest } from '../src/shared/card.ts'
 
 const app = express()
 app.use(cors())
@@ -37,6 +39,28 @@ app.post('/api/generate-test', async (req, res) => {
   } catch (err) {
     console.error('[generate-test] failed:', err)
     res.status(500).json({ error: 'generation failed' })
+  }
+})
+
+app.post('/api/render-card', async (req, res) => {
+  const b = req.body ?? {}
+  const request: RenderRequest = {
+    childName: String(b.childName ?? 'your child'),
+    subject: String(b.subject ?? 'Maths'),
+    chapter: String(b.chapter ?? ''),
+    polarity: b.polarity === 'positive' ? 'positive' : 'negative',
+    finding: String(b.finding ?? ''),
+    detail: String(b.detail ?? ''),
+    actionTonight: String(b.actionTonight ?? ''),
+  }
+  if (!request.finding) return res.status(400).json({ error: 'missing finding' })
+
+  try {
+    const { card, source } = await renderCard(request)
+    res.json({ card, source })
+  } catch (err) {
+    console.error('[render-card] failed:', err)
+    res.status(500).json({ error: 'render failed' })
   }
 })
 

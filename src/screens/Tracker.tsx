@@ -1,8 +1,11 @@
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import PhoneFrame from '../components/PhoneFrame'
 import BottomNav from '../components/BottomNav'
 import { useApp } from '../state/AppContext'
 import type { Rating, RatingKey } from '../engine'
+import { renderCard } from '../api/card'
+import { fallbackCard, type CardCopy, type RenderRequest } from '../shared/card'
 import { c, serif } from '../theme'
 
 const META: Record<RatingKey, { label: string; sub: string }> = {
@@ -93,6 +96,33 @@ export default function Tracker() {
   const { child, report } = useApp()
   const { ratings, chapters, headline, readinessPct, velocityBand, velocityPtsPerWeek } = report
 
+  // Build the render request from the engine's chosen insight, then fetch warm
+  // prose. The engine's own copy shows instantly and is replaced when (if) the
+  // LLM version arrives — so the card always renders.
+  const renderReq: RenderRequest | null = headline
+    ? {
+        childName: child.name,
+        subject: 'Maths',
+        chapter: chapters[0]?.chapter ?? 'Maths',
+        polarity: headline.polarity,
+        finding: headline.headline,
+        detail: headline.detail,
+        actionTonight: headline.actionTonight,
+      }
+    : null
+  const [card, setCard] = useState<CardCopy | null>(() => (renderReq ? fallbackCard(renderReq) : null))
+  useEffect(() => {
+    if (!renderReq) return
+    let alive = true
+    renderCard(renderReq).then((r) => {
+      if (alive) setCard(r.card)
+    })
+    return () => {
+      alive = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [headline?.metric])
+
   return (
     <PhoneFrame
       bg={c.home}
@@ -139,18 +169,23 @@ export default function Tracker() {
         <Radar ratings={ratings} />
       </div>
 
-      {/* Insight headline (rules engine chose it; prose is templated) */}
-      {headline && (
+      {/* Insight card: rules engine CHOSE it and owns the numbers; the LLM only
+          phrases it (guardrailed), falling back to the engine's own copy. */}
+      {card && (
         <div style={{ background: 'linear-gradient(135deg,#1E1B16,#2A251C)', borderRadius: 18, padding: '16px 18px', color: c.cream, marginBottom: 14 }}>
           <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', color: c.amber, marginBottom: 6 }}>
             This week&apos;s one thing
           </div>
-          <p style={{ fontFamily: serif, fontSize: 18, lineHeight: 1.3, margin: '0 0 8px', fontWeight: 500 }}>{headline.headline}</p>
-          <p style={{ margin: '0 0 10px', fontSize: 13, color: c.creamMute, fontWeight: 500, lineHeight: 1.4 }}>{headline.detail}</p>
-          <div style={{ background: 'rgba(224,160,32,.14)', borderRadius: 10, padding: '10px 12px' }}>
+          <p style={{ fontFamily: serif, fontSize: 18, lineHeight: 1.3, margin: '0 0 8px', fontWeight: 500 }}>{card.headline}</p>
+          <p style={{ margin: '0 0 10px', fontSize: 13, color: c.creamMute, fontWeight: 500, lineHeight: 1.4 }}>{card.body}</p>
+          <div style={{ background: 'rgba(224,160,32,.14)', borderRadius: 10, padding: '10px 12px', marginBottom: 8 }}>
             <span style={{ fontSize: 11, fontWeight: 800, color: c.amber }}>TONIGHT · </span>
-            <span style={{ fontSize: 13, fontWeight: 600, color: c.cream }}>{headline.actionTonight}</span>
+            <span style={{ fontSize: 13, fontWeight: 600, color: c.cream }}>{card.actionTonight}</span>
           </div>
+          <p style={{ margin: 0, fontSize: 12, color: c.creamMute, fontWeight: 500, lineHeight: 1.4 }}>
+            <span style={{ color: c.blueInk, fontWeight: 700 }}>Our side · </span>
+            {card.ourSide}
+          </p>
         </div>
       )}
 
