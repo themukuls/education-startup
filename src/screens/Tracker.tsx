@@ -1,0 +1,226 @@
+import { useNavigate } from 'react-router-dom'
+import PhoneFrame from '../components/PhoneFrame'
+import BottomNav from '../components/BottomNav'
+import { useApp } from '../state/AppContext'
+import type { Rating, RatingKey } from '../engine'
+import { c, serif } from '../theme'
+
+const META: Record<RatingKey, { label: string; sub: string }> = {
+  mastery: { label: 'Mastery', sub: 'How much they truly know' },
+  retention: { label: 'Retention', sub: 'How well it sticks' },
+  speed: { label: 'Speed', sub: 'Working pace' },
+  carefulness: { label: 'Carefulness', sub: 'Marks kept, not slipped' },
+  consistency: { label: 'Consistency', sub: 'Showing up & finishing' },
+}
+const ORDER: RatingKey[] = ['mastery', 'retention', 'speed', 'carefulness', 'consistency']
+
+function scoreColor(score: number | null): string {
+  if (score == null) return c.ink4
+  if (score >= 75) return c.blue
+  if (score >= 55) return c.amberDeep
+  return c.red
+}
+
+/** Pentagon radar of the 5 ratings. Null (below data floor) → a small hollow node. */
+function Radar({ ratings }: { ratings: Record<RatingKey, Rating> }) {
+  const cx = 128
+  const cy = 122
+  const R = 92
+  const pt = (frac: number, i: number) => {
+    const ang = (-90 + i * 72) * (Math.PI / 180)
+    return [cx + R * frac * Math.cos(ang), cy + R * frac * Math.sin(ang)]
+  }
+  const grid = [0.25, 0.5, 0.75, 1].map(
+    (g) => ORDER.map((_, i) => pt(g, i).join(',')).join(' '),
+  )
+  const dataPts = ORDER.map((k, i) => {
+    const s = ratings[k].score
+    return pt(s == null ? 0.14 : Math.max(0.08, s / 100), i)
+  })
+  const dataPoly = dataPts.map((p) => p.join(',')).join(' ')
+
+  return (
+    <svg viewBox="0 0 256 250" width="100%" height="230" style={{ display: 'block' }}>
+      {grid.map((g, i) => (
+        <polygon key={i} points={g} fill="none" stroke={c.line3} strokeWidth={1} />
+      ))}
+      {ORDER.map((_, i) => {
+        const [x, y] = pt(1, i)
+        return <line key={i} x1={cx} y1={cy} x2={x} y2={y} stroke={c.line3} strokeWidth={1} />
+      })}
+      <polygon points={dataPoly} fill="rgba(35,84,199,.16)" stroke={c.blue} strokeWidth={2} />
+      {ORDER.map((k, i) => {
+        const [x, y] = dataPts[i]
+        const nul = ratings[k].score == null
+        return (
+          <circle
+            key={k}
+            cx={x}
+            cy={y}
+            r={4}
+            fill={nul ? c.surface : c.blue}
+            stroke={nul ? c.ink4 : c.blue}
+            strokeWidth={2}
+          />
+        )
+      })}
+      {ORDER.map((k, i) => {
+        const [x, y] = pt(1.16, i)
+        return (
+          <text
+            key={k}
+            x={x}
+            y={y}
+            textAnchor="middle"
+            dominantBaseline="middle"
+            fontSize={11}
+            fontWeight={800}
+            fill={c.ink2}
+            fontFamily="Hanken Grotesk, sans-serif"
+          >
+            {META[k].label}
+          </text>
+        )
+      })}
+    </svg>
+  )
+}
+
+// Learning Tracker — the 5-axis profile, insight headline, and chapter ledger.
+// Every value here is computed by the deterministic engine (no hardcoded metrics).
+export default function Tracker() {
+  const nav = useNavigate()
+  const { child, report } = useApp()
+  const { ratings, chapters, headline, readinessPct, velocityBand, velocityPtsPerWeek } = report
+
+  return (
+    <PhoneFrame
+      bg={c.home}
+      time="7:36"
+      contentStyle={{ padding: '16px 20px 86px', color: c.ink }}
+      footer={<BottomNav active="progress" />}
+    >
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', color: c.ink3 }}>
+            Learning profile
+          </div>
+          <h2 style={{ fontFamily: serif, fontWeight: 600, fontSize: 25, margin: '2px 0 0' }}>{child.name}</h2>
+        </div>
+        <div style={{ textAlign: 'right' }}>
+          <div style={{ fontFamily: serif, fontSize: 30, fontWeight: 700, color: c.blue, lineHeight: 1 }}>
+            {readinessPct}
+            <span style={{ fontSize: 15 }}>%</span>
+          </div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: c.ink3 }}>READINESS</div>
+        </div>
+      </div>
+
+      {velocityBand && (
+        <div
+          style={{
+            display: 'inline-flex',
+            alignSelf: 'flex-start',
+            background: velocityBand === 'slipping' ? c.redWash : c.blueWash,
+            color: velocityBand === 'slipping' ? c.red : c.blue,
+            fontSize: 12,
+            fontWeight: 800,
+            padding: '5px 11px',
+            borderRadius: 12,
+            marginBottom: 4,
+          }}
+        >
+          {velocityBand === 'rising' ? '↑' : velocityBand === 'slipping' ? '↓' : '→'} {velocityBand}
+          {velocityPtsPerWeek != null ? ` · ${velocityPtsPerWeek > 0 ? '+' : ''}${velocityPtsPerWeek} pts/wk` : ''}
+        </div>
+      )}
+
+      <div style={{ background: c.white, border: `1px solid ${c.line2}`, borderRadius: 20, padding: '6px 6px 10px', marginBottom: 14 }}>
+        <Radar ratings={ratings} />
+      </div>
+
+      {/* Insight headline (rules engine chose it; prose is templated) */}
+      {headline && (
+        <div style={{ background: 'linear-gradient(135deg,#1E1B16,#2A251C)', borderRadius: 18, padding: '16px 18px', color: c.cream, marginBottom: 14 }}>
+          <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', color: c.amber, marginBottom: 6 }}>
+            This week&apos;s one thing
+          </div>
+          <p style={{ fontFamily: serif, fontSize: 18, lineHeight: 1.3, margin: '0 0 8px', fontWeight: 500 }}>{headline.headline}</p>
+          <p style={{ margin: '0 0 10px', fontSize: 13, color: c.creamMute, fontWeight: 500, lineHeight: 1.4 }}>{headline.detail}</p>
+          <div style={{ background: 'rgba(224,160,32,.14)', borderRadius: 10, padding: '10px 12px' }}>
+            <span style={{ fontSize: 11, fontWeight: 800, color: c.amber }}>TONIGHT · </span>
+            <span style={{ fontSize: 13, fontWeight: 600, color: c.cream }}>{headline.actionTonight}</span>
+          </div>
+        </div>
+      )}
+
+      {/* The five ratings */}
+      <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', color: c.ink3, marginBottom: 9 }}>
+        The five signals
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 9, marginBottom: 16 }}>
+        {ORDER.map((k) => {
+          const r = ratings[k]
+          const col = scoreColor(r.score)
+          return (
+            <div key={k} style={{ background: c.white, border: `1px solid ${c.line2}`, borderRadius: 14, padding: '13px 15px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
+                <div>
+                  <span style={{ fontSize: 15, fontWeight: 800 }}>{META[k].label}</span>
+                  <span style={{ fontSize: 12, color: c.ink3, fontWeight: 500, marginLeft: 8 }}>{META[k].sub}</span>
+                </div>
+                <span style={{ fontSize: 12.5, fontWeight: 800, color: col }}>{r.band}</span>
+              </div>
+              <div style={{ height: 7, background: '#EDE6DB', borderRadius: 5, overflow: 'hidden', marginBottom: 7 }}>
+                {r.score != null ? (
+                  <div style={{ width: `${r.score}%`, height: '100%', background: col, borderRadius: 5 }} />
+                ) : (
+                  <div style={{ width: '100%', height: '100%', background: `repeating-linear-gradient(90deg, ${c.line3} 0 6px, transparent 6px 12px)` }} />
+                )}
+              </div>
+              <p style={{ margin: 0, fontSize: 12.5, color: c.ink2, fontWeight: 500 }}>
+                {r.hasData ? r.evidence : `${r.evidence} (needs more tests)`}
+              </p>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Chapter ledger — weakest first */}
+      <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', color: c.ink3, marginBottom: 9 }}>
+        Chapter ledger
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 'auto' }}>
+        {chapters.map((ch) => (
+          <div key={ch.chapter} style={{ background: c.white, border: `1px solid ${c.line2}`, borderRadius: 12, padding: '11px 14px', display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 14, fontWeight: 700 }}>{ch.chapter}</div>
+              <div style={{ display: 'flex', gap: 6, marginTop: 3 }}>
+                {ch.roteFlag === 'ROTE' && <Flag text="memorised" bg={c.redWash} fg={c.red} />}
+                {ch.roteFlag === 'INTUITIVE' && <Flag text="fumbles definitions" bg={c.amberWash} fg={c.amberDark} />}
+                {ch.retentionBand === 'fast_fading' && <Flag text="fading" bg={c.amberWash} fg={c.amberDark} />}
+                {ch.retentionBand === 'strong' && <Flag text="sticks" bg={c.blueWash} fg={c.blue} />}
+              </div>
+            </div>
+            <div style={{ fontFamily: serif, fontSize: 18, fontWeight: 700, color: scoreColor(Math.round(ch.readiness * 100)) }}>
+              {Math.round(ch.readiness * 100)}%
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <button
+        onClick={() => nav('/term-audit')}
+        style={{ width: '100%', background: c.ink, color: c.surface, border: 'none', borderRadius: 16, padding: 16, fontSize: 15, fontWeight: 800, fontFamily: 'inherit', marginTop: 14 }}
+      >
+        See the September Term Audit →
+      </button>
+    </PhoneFrame>
+  )
+}
+
+function Flag({ text, bg, fg }: { text: string; bg: string; fg: string }) {
+  return (
+    <span style={{ background: bg, color: fg, fontSize: 10.5, fontWeight: 800, padding: '2px 8px', borderRadius: 8 }}>{text}</span>
+  )
+}

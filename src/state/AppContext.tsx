@@ -1,6 +1,11 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from 'react'
+import { computeReport, type LearningReport } from '../engine'
+import { buildStream } from '../engine/synthetic'
 
 export type Goal = 'board' | 'weak-subject' | 'habit'
+
+// Fixed "now" so the demo report is fully deterministic (no Date.now()).
+const DEMO_ASOF = 1_760_000_000_000
 
 export interface Child {
   name: string
@@ -28,6 +33,8 @@ interface AppContextValue extends AppState {
   setGoal: (g: Goal) => void
   setParentName: (n: string) => void
   recordTest: (score: number, answered: number) => void
+  /** Computed learning report from the engine — the single source of every metric. */
+  report: LearningReport
 }
 
 const defaultChild: Child = {
@@ -50,6 +57,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [lastScore, setLastScore] = useState<number | null>(null)
   const [answered, setAnswered] = useState(0)
 
+  // The demo learning report — computed once from a synthetic event stream by
+  // the deterministic engine. In production this stream is the child's real
+  // answered-question history; nothing about the UI changes.
+  const report = useMemo(
+    () => computeReport(buildStream({ archetype: 'improver', childId: 'mukul', asOf: DEMO_ASOF, seed: 7 })),
+    [],
+  )
+
   const value = useMemo<AppContextValue>(() => {
     const parentInitial = (parentName.trim()[0] || 'P').toUpperCase()
     return {
@@ -62,6 +77,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       streak,
       lastScore,
       answered,
+      report,
       setParentName,
       setGoal,
       setChild: (patch) => setChildState((prev) => ({ ...prev, ...patch })),
@@ -70,7 +86,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setAnswered(ans)
       },
     }
-  }, [parentName, child, goal, readiness, weeklyDelta, streak, lastScore, answered])
+  }, [parentName, child, goal, readiness, weeklyDelta, streak, lastScore, answered, report])
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>
 }

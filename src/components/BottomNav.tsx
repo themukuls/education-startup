@@ -19,7 +19,7 @@ const tabs: { key: Tab; label: string; to: string; icon: (active: boolean) => JS
   {
     key: 'progress',
     label: 'Progress',
-    to: '/term-audit',
+    to: '/tracker',
     icon: (a) => <div style={{ width: 20, height: 14, border: `2px solid ${a ? c.blue : c.ink4}`, borderRadius: 3 }} />,
   },
   {

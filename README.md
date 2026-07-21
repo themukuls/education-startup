@@ -19,8 +19,39 @@ named retention principle from the design.
 - **Capacitor-ready** — relative asset base, hash routing, `capacitor.config.ts`
   in place. See "Going native" below.
 
-No backend yet — the diagnosis/prescription content is representative sample
-data (`src/data/testQuestions.ts`). The LLM diagnosis engine is the next layer.
+## The learning-tracker engine (`src/engine/`)
+
+The core product logic — a **deterministic, zero-ML rating engine** that turns a
+stream of answered-question events into the five parent-facing signals
+(**mastery, retention, speed, carefulness, consistency**), a chapter ledger, and
+one weekly insight. It implements the Learning & Progress Tracker spec, layer by
+layer:
+
+```
+raw events → enrichment (speed ratio, error class, lucky flag)   [enrich.ts]
+           → skill ledger (readiness, rote gap, memory decay)     [ledger.ts]
+           → trackers (velocity, consistency, stamina, exam-skill)[trackers.ts]
+           → 5 ratings with data floors                           [ratings.ts]
+           → insight selector v1 (score = z × A × N, rules only)  [insights.ts]
+```
+
+**Design contract:** every parent-facing number originates in the engine — no
+LLM ever invents a claim or a metric. The engine is pure, deterministic (a
+seeded generator, no `Date.now()`), and unit-tested (`npm test`, 10 tests
+covering archetype behaviour and the cold-start data floors). The app's Learning
+Tracker, Diagnosis Card, Home hero, and Term Audit all read from
+`computeReport()` — nothing is hardcoded.
+
+`src/engine/synthetic.ts` builds realistic event streams (improver / rusher /
+crammer / fader / cold-start) for tests and for seeding the demo.
+
+## What's next (LLM layer — Phase 2/3)
+
+No backend yet. The next layer is two narrow LLM jobs behind a small server that
+holds the API key: **question generation** from syllabus position, and **prose
+rendering** of the engine's chosen insight (with a banned-words guardrail). Both
+are single `claude-opus-4-8` calls with structured outputs; the engine above
+stays the source of every number.
 
 ## Run it
 
