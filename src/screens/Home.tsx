@@ -7,7 +7,9 @@ import { c, serif } from '../theme'
 // Screen 08 — Parent home ★ daily anchor. "Where you left off" + one action + hero emotion.
 export default function Home() {
   const nav = useNavigate()
-  const { parentName, child, readiness, weeklyDelta, streak } = useApp()
+  const { parentName, child, streak, report } = useApp()
+  const readiness = report.readinessPct
+  const weeklyDelta = Math.max(1, Math.round(report.velocityPtsPerWeek ?? 0))
 
   return (
     <PhoneFrame

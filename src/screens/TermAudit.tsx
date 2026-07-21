@@ -3,17 +3,37 @@ import BottomNav from '../components/BottomNav'
 import { useApp } from '../state/AppContext'
 import { c, serif } from '../theme'
 
-const bars = [
-  { label: 'W1', val: 54, h: 54, color: '#E7DFD2', text: c.ink2, bold: false },
-  { label: 'W2', val: 58, h: 58, color: '#CBB98F', text: c.ink2, bold: false },
-  { label: 'W3', val: 61, h: 61, color: '#8CA0E4', text: c.ink2, bold: false },
-  { label: 'W4', val: 68, h: 68, color: c.blue, text: c.blue, bold: true },
-]
+const BAR_COLORS = ['#E7DFD2', '#CBB98F', '#8CA0E4', c.blue]
 
 // Screen 11 — Term Audit ★ the killer artifact. Longitudinal ledger — "is your ₹X working?"
 export default function TermAudit() {
-  const { child } = useApp()
+  const { child, report } = useApp()
   const spend = child.monthlySpend.toLocaleString('en-IN')
+
+  // real weekly trajectory from the engine (pad to 4 for the chart)
+  const traj = report.trajectory.slice(-4)
+  const tMin = Math.min(...traj)
+  const tMax = Math.max(...traj)
+  const bars = traj.map((val, i, arr) => {
+    const last = i === arr.length - 1
+    // rescale to 40–100% so small week-to-week gains read clearly
+    const h = tMax > tMin ? 40 + ((val - tMin) / (tMax - tMin)) * 60 : 70
+    return {
+      label: `W${i + 1}`,
+      val,
+      h,
+      color: BAR_COLORS[Math.min(i, BAR_COLORS.length - 1)],
+      text: last ? c.blue : c.ink2,
+      bold: last,
+    }
+  })
+  const gain = traj.length >= 2 ? traj[traj.length - 1] - traj[0] : 0
+  const working = gain > 0
+  // predicted board band around current readiness, ±8
+  const lo = Math.min(95, report.readinessPct + 4)
+  const hi = Math.min(99, report.readinessPct + 12)
+  const gapsClosed = report.chapters.filter((ch) => ch.readiness >= 0.75).length
+  const gapsTotal = report.chapters.length
 
   return (
     <PhoneFrame
@@ -30,7 +50,9 @@ export default function TermAudit() {
       <div style={{ background: c.white, border: `1px solid ${c.line2}`, borderRadius: 18, padding: 18, marginBottom: 14 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 14 }}>
           <span style={{ fontSize: 13, fontWeight: 800, color: c.ink2 }}>Readiness trajectory</span>
-          <span style={{ background: c.blueWash, color: c.blue, fontSize: 12, fontWeight: 800, padding: '4px 10px', borderRadius: 12 }}>↑ Improving</span>
+          <span style={{ background: working ? c.blueWash : c.amberWash, color: working ? c.blue : c.amberDeep, fontSize: 12, fontWeight: 800, padding: '4px 10px', borderRadius: 12 }}>
+            {working ? '↑ Improving' : '→ Holding'}
+          </span>
         </div>
         <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10, height: 120 }}>
           {bars.map((b) => (
@@ -48,9 +70,11 @@ export default function TermAudit() {
         <div style={{ fontSize: 11.5, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', color: c.blueInk, marginBottom: 6 }}>The question you actually paid for</div>
         <p style={{ fontFamily: serif, fontSize: 20, lineHeight: 1.25, margin: '0 0 14px', fontWeight: 500 }}>Is your ₹{spend}/month working?</p>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, background: 'rgba(110,140,234,.14)', borderRadius: 12, padding: '12px 14px' }}>
-          <div style={{ fontFamily: serif, fontSize: 30, fontWeight: 700, color: c.blueLight }}>Yes</div>
+          <div style={{ fontFamily: serif, fontSize: 30, fontWeight: 700, color: c.blueLight }}>{working ? 'Yes' : 'Watch'}</div>
           <div style={{ fontSize: 13, color: c.navyBright, fontWeight: 600, lineHeight: 1.35 }}>
-            +14 readiness points this term, driven by the gap you closed at home — not new fees.
+            {working
+              ? `+${gain} readiness points this term, driven by the gap you closed at home — not new fees.`
+              : `Readiness is flat this term — the fix plan is where to push next.`}
           </div>
         </div>
       </div>
@@ -59,13 +83,13 @@ export default function TermAudit() {
       <div style={{ display: 'flex', gap: 10, marginBottom: 'auto' }}>
         <div style={{ flex: 1, background: c.blueWash, borderRadius: 14, padding: '14px 15px' }}>
           <div style={{ fontSize: 11.5, color: c.blueMid, fontWeight: 800, marginBottom: 4 }}>PREDICTED BOARDS</div>
-          <div style={{ fontFamily: serif, fontSize: 24, fontWeight: 700, color: c.blueDeep }}>72–80%</div>
+          <div style={{ fontFamily: serif, fontSize: 24, fontWeight: 700, color: c.blueDeep }}>{lo}–{hi}%</div>
           <div style={{ fontSize: 11.5, color: c.blueMid, fontWeight: 600 }}>±8% band</div>
         </div>
         <div style={{ flex: 1, background: c.white, border: `1px solid ${c.line2}`, borderRadius: 14, padding: '14px 15px' }}>
-          <div style={{ fontSize: 11.5, color: c.ink3, fontWeight: 800, marginBottom: 4 }}>GAPS CLOSED</div>
-          <div style={{ fontFamily: serif, fontSize: 24, fontWeight: 700 }}>2 of 3</div>
-          <div style={{ fontSize: 11.5, color: c.amberDeep, fontWeight: 700 }}>1 in progress</div>
+          <div style={{ fontSize: 11.5, color: c.ink3, fontWeight: 800, marginBottom: 4 }}>ON TRACK</div>
+          <div style={{ fontFamily: serif, fontSize: 24, fontWeight: 700 }}>{gapsClosed} of {gapsTotal}</div>
+          <div style={{ fontSize: 11.5, color: c.amberDeep, fontWeight: 700 }}>chapters ≥ 75%</div>
         </div>
       </div>
 

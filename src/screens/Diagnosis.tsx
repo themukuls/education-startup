@@ -1,13 +1,24 @@
 import { useNavigate } from 'react-router-dom'
 import PhoneFrame from '../components/PhoneFrame'
 import { useApp } from '../state/AppContext'
+import { shareCard } from '../api/whatsapp'
+import type { CardCopy } from '../shared/card'
 import { c, serif } from '../theme'
 
 // Screen 07 — Diagnosis Card ★ hero artifact. Variable reward + shareable social proof.
 export default function Diagnosis() {
   const nav = useNavigate()
-  const { child, lastScore } = useApp()
+  const { child, parentPhone, lastScore } = useApp()
   const readiness = lastScore ?? 61
+
+  // The shareable Diagnosis Card, as a WhatsApp message.
+  const diagnosisCard: CardCopy = {
+    headline: `${child.name}'s Maths — Quadratics: ${readiness}% ready`,
+    body: 'Understands the concepts, but forms equations from word problems wrong — set up 3 of 4 incorrectly.',
+    actionTonight: 'Word-problem → equation drills, 15 min a day.',
+    ourSide: 'Re-test scheduled Thursday to prove it worked.',
+    kidLine: 'Crack word problems this week for a streak bonus! 🔥',
+  }
 
   return (
     <PhoneFrame time="9:56" contentStyle={{ padding: '16px 22px 24px', color: c.ink }}>
@@ -78,10 +89,16 @@ export default function Diagnosis() {
 
       <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
         <button
-          onClick={() => alert('Diagnosis Card ready to share on WhatsApp')}
-          style={{ flex: 1, background: c.ink, color: c.surface, border: 'none', borderRadius: 15, padding: 16, fontSize: 15, fontWeight: 800, fontFamily: 'inherit' }}
+          onClick={() =>
+            shareCard(
+              diagnosisCard,
+              { childName: child.name, subject: 'Maths', chapter: 'Quadratics', readinessPct: readiness },
+              parentPhone,
+            )
+          }
+          style={{ flex: 1, background: '#25D366', color: '#0A2E1A', border: 'none', borderRadius: 15, padding: 16, fontSize: 15, fontWeight: 800, fontFamily: 'inherit' }}
         >
-          Share card
+          Share on WhatsApp
         </button>
         <button
           onClick={() => nav('/home')}

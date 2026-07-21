@@ -9,5 +9,9 @@ export default defineConfig({
   server: {
     host: true,
     port: 5173,
+    proxy: {
+      // dev: forward API calls to the local backend (npm run server)
+      '/api': 'http://localhost:8787',
+    },
   },
 })

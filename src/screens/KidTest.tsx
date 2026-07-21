@@ -2,16 +2,53 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import PhoneFrame from '../components/PhoneFrame'
 import { useApp } from '../state/AppContext'
-import { auditQuestions } from '../data/testQuestions'
+import { loadTest, type TestResult } from '../api/quiz'
+import type { Question } from '../shared/quiz'
 import { c, serif } from '../theme'
 
 const TOTAL_SECONDS = 600
 
 // Screen 05 — Kid test (kid-facing). One path, big targets, live progress bar.
+// This wrapper loads the generated test (LLM backend), showing a brief
+// preparing state, then renders the runner. Falls back to the static bank.
 export default function KidTest() {
+  const { child } = useApp()
+  const [test, setTest] = useState<TestResult | null>(null)
+
+  useEffect(() => {
+    let alive = true
+    loadTest({ board: child.board, klass: child.klass, subject: 'Maths', chapter: 'Quadratics' }).then((t) => {
+      if (alive) setTest(t)
+    })
+    return () => {
+      alive = false
+    }
+  }, [child.board, child.klass])
+
+  if (!test) return <PreparingScreen name={child.name} />
+  return <TestRunner questions={test.questions} />
+}
+
+function PreparingScreen({ name }: { name: string }) {
+  return (
+    <PhoneFrame bg="#161B3E" notch="#0D0F26" tint="light" time="9:47" battery={70} contentStyle={{ padding: '20px 26px 26px', color: c.navyText, alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ margin: 'auto', textAlign: 'center' }}>
+        <div style={{ width: 56, height: 56, borderRadius: '50%', border: `3px solid ${c.navy2}`, borderTopColor: c.amber, margin: '0 auto 22px', animation: 'ppSpin 0.9s linear infinite' }} />
+        <div style={{ fontSize: 12.5, fontWeight: 800, letterSpacing: '.16em', textTransform: 'uppercase', color: c.amber, marginBottom: 10 }}>Preparing the audit</div>
+        <h2 style={{ fontFamily: serif, fontWeight: 600, fontSize: 26, margin: 0, lineHeight: 1.2 }}>
+          Building {name}&apos;s
+          <br />
+          questions…
+        </h2>
+        <p style={{ fontSize: 14, color: c.navyMute, marginTop: 14, fontWeight: 500 }}>Mapped to today&apos;s syllabus position.</p>
+      </div>
+    </PhoneFrame>
+  )
+}
+
+function TestRunner({ questions }: { questions: Question[] }) {
   const nav = useNavigate()
   const { child, recordTest } = useApp()
-  const questions = auditQuestions
   const [idx, setIdx] = useState(0)
   const [selected, setSelected] = useState<number | null>(null)
   const [correct, setCorrect] = useState(0)
