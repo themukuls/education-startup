@@ -89,15 +89,29 @@ On a violation it retries once, then **falls back to the engine's own copy** —
 which is safe by construction. Mock mode (no key) returns that same copy. So the
 insight card always renders, and a hallucinated claim can never reach a parent.
 
-`npm test` covers the engine (10), the question guardrail (8), and the language
-guardrail (7) — 25 tests.
+## WhatsApp delivery (`POST /api/send-card`)
+
+The rendered card ships to parents over WhatsApp two ways
+(`src/shared/whatsapp.ts` formats the message once for both):
+
+- **Share** — the "Share on WhatsApp" buttons (Diagnosis Card, Learning Tracker)
+  open a `wa.me` deep link with the card pre-composed. No credentials; works on
+  any device; this is the plan's shareable-card / referral hook.
+- **Delivery** — `server/whatsapp.ts` sends via the Meta Cloud API when
+  `WHATSAPP_TOKEN` + `WHATSAPP_PHONE_ID` are set (template message for
+  business-initiated sends), and returns a **mock preview** (message + `wa.me`
+  link) otherwise — so the flow is exercisable without credentials.
+
+`npm test` covers the engine (10), question guardrail (8), language guardrail
+(7), and WhatsApp formatting (5) — 30 tests.
 
 ## What's next
 
 - **Real generation quality** — needs an `ANTHROPIC_API_KEY`; run a batch
   through generate → verify and review accuracy (the metric the business lives
   on).
-- **WhatsApp delivery** of the rendered card (the design's screen 13).
+- **Capture the parent's phone** in onboarding / the "You" screen so automated
+  delivery has a recipient (share already works without it).
 - **Prediction vs. actual** — capture `parentEnteredMarks` (already in the event
   schema) to publish the accuracy track record.
 

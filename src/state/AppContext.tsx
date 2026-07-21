@@ -18,6 +18,8 @@ export interface Child {
 export interface AppState {
   parentName: string
   parentInitial: string
+  /** E.164-ish; empty → WhatsApp share opens the contact picker. */
+  parentPhone: string
   child: Child
   goal: Goal
   readiness: number
@@ -49,6 +51,7 @@ const AppContext = createContext<AppContextValue | null>(null)
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [parentName, setParentName] = useState('Priya')
+  const [parentPhone] = useState('')
   const [child, setChildState] = useState<Child>(defaultChild)
   const [goal, setGoal] = useState<Goal>('board')
   const [readiness] = useState(68)
@@ -70,6 +73,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return {
       parentName,
       parentInitial,
+      parentPhone,
       child,
       goal,
       readiness,
@@ -86,7 +90,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setAnswered(ans)
       },
     }
-  }, [parentName, child, goal, readiness, weeklyDelta, streak, lastScore, answered, report])
+  }, [parentName, parentPhone, child, goal, readiness, weeklyDelta, streak, lastScore, answered, report])
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>
 }

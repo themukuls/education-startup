@@ -5,8 +5,9 @@ import express from 'express'
 import cors from 'cors'
 import { generateTest, hasKey } from './generate.ts'
 import { renderCard } from './render.ts'
+import { sendCard, hasWhatsApp } from './whatsapp.ts'
 import { toQuestions, type GenerateRequest } from '../src/shared/quiz.ts'
-import type { RenderRequest } from '../src/shared/card.ts'
+import type { RenderRequest, CardCopy } from '../src/shared/card.ts'
 
 const app = express()
 app.use(cors())
@@ -15,7 +16,12 @@ app.use(express.json({ limit: '256kb' }))
 const PORT = Number(process.env.PORT ?? 8787)
 
 app.get('/api/health', (_req, res) => {
-  res.json({ ok: true, mode: hasKey() ? 'llm' : 'mock', model: 'claude-opus-4-8' })
+  res.json({
+    ok: true,
+    llm: hasKey() ? 'llm' : 'mock',
+    whatsapp: hasWhatsApp() ? 'live' : 'mock',
+    model: 'claude-opus-4-8',
+  })
 })
 
 app.post('/api/generate-test', async (req, res) => {
@@ -64,6 +70,33 @@ app.post('/api/render-card', async (req, res) => {
   }
 })
 
+app.post('/api/send-card', async (req, res) => {
+  const b = req.body ?? {}
+  const card = b.card as CardCopy | undefined
+  if (!card?.headline || !card?.body || !card?.actionTonight) {
+    return res.status(400).json({ error: 'missing card' })
+  }
+  try {
+    const result = await sendCard({
+      card,
+      phone: b.phone,
+      ctx: {
+        childName: String(b.childName ?? 'your child'),
+        subject: b.subject,
+        chapter: b.chapter,
+        readinessPct: typeof b.readinessPct === 'number' ? b.readinessPct : undefined,
+        ctaUrl: b.ctaUrl,
+      },
+    })
+    res.json(result)
+  } catch (err) {
+    console.error('[send-card] failed:', err)
+    res.status(500).json({ error: 'send failed' })
+  }
+})
+
 app.listen(PORT, () => {
-  console.log(`ParentProof API on :${PORT} — mode=${hasKey() ? 'llm (claude-opus-4-8)' : 'mock (no ANTHROPIC_API_KEY)'}`)
+  console.log(
+    `ParentProof API on :${PORT} — llm=${hasKey() ? 'claude-opus-4-8' : 'mock'} · whatsapp=${hasWhatsApp() ? 'live' : 'mock'}`,
+  )
 })

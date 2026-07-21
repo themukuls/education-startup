@@ -5,6 +5,7 @@ import BottomNav from '../components/BottomNav'
 import { useApp } from '../state/AppContext'
 import type { Rating, RatingKey } from '../engine'
 import { renderCard } from '../api/card'
+import { shareCard } from '../api/whatsapp'
 import { fallbackCard, type CardCopy, type RenderRequest } from '../shared/card'
 import { c, serif } from '../theme'
 
@@ -93,7 +94,7 @@ function Radar({ ratings }: { ratings: Record<RatingKey, Rating> }) {
 // Every value here is computed by the deterministic engine (no hardcoded metrics).
 export default function Tracker() {
   const nav = useNavigate()
-  const { child, report } = useApp()
+  const { child, parentPhone, report } = useApp()
   const { ratings, chapters, headline, readinessPct, velocityBand, velocityPtsPerWeek } = report
 
   // Build the render request from the engine's chosen insight, then fetch warm
@@ -182,10 +183,22 @@ export default function Tracker() {
             <span style={{ fontSize: 11, fontWeight: 800, color: c.amber }}>TONIGHT · </span>
             <span style={{ fontSize: 13, fontWeight: 600, color: c.cream }}>{card.actionTonight}</span>
           </div>
-          <p style={{ margin: 0, fontSize: 12, color: c.creamMute, fontWeight: 500, lineHeight: 1.4 }}>
+          <p style={{ margin: '0 0 14px', fontSize: 12, color: c.creamMute, fontWeight: 500, lineHeight: 1.4 }}>
             <span style={{ color: c.blueInk, fontWeight: 700 }}>Our side · </span>
             {card.ourSide}
           </p>
+          <button
+            onClick={() =>
+              shareCard(
+                card,
+                { childName: child.name, subject: 'Maths', chapter: chapters[0]?.chapter, readinessPct },
+                parentPhone,
+              )
+            }
+            style={{ width: '100%', background: '#25D366', color: '#0A2E1A', border: 'none', borderRadius: 12, padding: 13, fontSize: 14, fontWeight: 800, fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+          >
+            <WhatsAppGlyph /> Send this on WhatsApp
+          </button>
         </div>
       )}
 
@@ -257,5 +270,13 @@ export default function Tracker() {
 function Flag({ text, bg, fg }: { text: string; bg: string; fg: string }) {
   return (
     <span style={{ background: bg, color: fg, fontSize: 10.5, fontWeight: 800, padding: '2px 8px', borderRadius: 8 }}>{text}</span>
+  )
+}
+
+export function WhatsAppGlyph({ size = 17 }: { size?: number }) {
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} fill="#0A2E1A" aria-hidden>
+      <path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2 22l5.25-1.38c1.45.79 3.08 1.21 4.79 1.21 5.46 0 9.91-4.45 9.91-9.91C21.95 6.45 17.5 2 12.04 2zm5.8 14.03c-.24.68-1.2 1.26-1.97 1.42-.53.11-1.22.2-3.56-.77-2.99-1.24-4.91-4.27-5.06-4.47-.15-.2-1.22-1.62-1.22-3.09s.77-2.19 1.04-2.49c.27-.3.59-.37.79-.37.2 0 .39.002.56.01.18.008.42-.068.66.5.24.58.82 2.01.89 2.16.07.15.12.32.02.52-.1.2-.15.32-.3.5-.15.18-.31.4-.45.53-.15.15-.3.31-.13.6.17.3.76 1.25 1.63 2.03 1.12 1 2.06 1.31 2.36 1.46.3.15.47.12.64-.07.17-.2.73-.85.93-1.14.2-.3.4-.25.66-.15.27.1 1.7.8 1.99.95.3.15.5.22.57.35.07.13.07.73-.17 1.41z" />
+    </svg>
   )
 }
