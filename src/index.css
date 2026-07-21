@@ -1,0 +1,94 @@
+/* ===== ParentProof global styles ===== */
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: #d8d0c1;
+  color: #1e1b16;
+  font-family: 'Hanken Grotesk', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+a {
+  color: #2354c7;
+  text-decoration: none;
+}
+a:hover {
+  color: #163a8f;
+}
+
+/* Hide scrollbars inside the phone viewport but keep scrolling */
+.pp-scroll {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.pp-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+/* ---- Desktop "device stage": centre the phone on a soft backdrop ---- */
+.pp-stage {
+  min-height: 100dvh;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 16px;
+  background:
+    radial-gradient(900px 700px at 15% -10%, #f0eadd 0%, #e7e0d4 55%, #ded6c7 100%);
+}
+
+/* ---- Animations from the design ---- */
+@keyframes ppGlow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(224, 160, 32, 0.45);
+  }
+  50% {
+    box-shadow: 0 0 0 14px rgba(224, 160, 32, 0);
+  }
+}
+@keyframes ppFloat {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+@keyframes ppFadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.pp-screen-enter {
+  animation: ppFadeUp 0.34s ease both;
+}
+
+/* On real phones (or narrow windows) the frame fills the screen edge-to-edge */
+@media (max-width: 460px) {
+  .pp-stage {
+    padding: 0;
+    align-items: stretch;
+  }
+}
