@@ -1,0 +1,99 @@
+/* The phone "device" — fixed 400x864 on desktop, full-bleed on real phones. */
+.pp-device {
+  position: relative;
+  width: 400px;
+  height: 864px;
+  max-height: 100dvh;
+  border-radius: 46px;
+  border: 1px solid #e7e1d8;
+  box-shadow:
+    0 30px 60px -20px rgba(40, 33, 22, 0.3),
+    0 8px 20px -8px rgba(40, 33, 22, 0.16);
+  overflow: hidden;
+  flex: none;
+}
+
+.pp-notch {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 118px;
+  height: 30px;
+  background: #1e1b16;
+  border-radius: 16px;
+  z-index: 20;
+}
+
+.pp-statusbar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 30px 0;
+  z-index: 10;
+}
+.pp-statusbar .pp-time {
+  font-size: 15px;
+  font-weight: 700;
+}
+.pp-statusbar .pp-signal {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.pp-statusbar .pp-5g {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+.pp-batt {
+  width: 24px;
+  height: 12px;
+  border-radius: 3px;
+  padding: 1.6px;
+}
+.pp-batt > i {
+  display: block;
+  width: 80%;
+  height: 100%;
+  border-radius: 1px;
+}
+
+/* Scrollable content area, offset below the status bar */
+.pp-content {
+  position: absolute;
+  top: 52px;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.pp-home-indicator {
+  position: absolute;
+  bottom: 9px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 134px;
+  height: 5px;
+  border-radius: 3px;
+  opacity: 0.5;
+  z-index: 30;
+}
+
+@media (max-width: 460px) {
+  .pp-device {
+    width: 100vw;
+    height: 100dvh;
+    border-radius: 0;
+    border: none;
+    box-shadow: none;
+  }
+}
