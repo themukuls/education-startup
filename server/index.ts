@@ -9,6 +9,7 @@ import { renderCard } from './render.ts'
 import { sendCard, hasWhatsApp } from './whatsapp.ts'
 import { getStore } from './db/index.ts'
 import { computeReport } from '../src/engine/index.ts'
+import { predictBand, resolvePredictions, accuracyStats, calibrationFrom } from '../src/engine/accuracy.ts'
 import type { AnswerEvent } from '../src/engine/types.ts'
 import { toQuestions, type GenerateRequest } from '../src/shared/quiz.ts'
 import type { RenderRequest, CardCopy } from '../src/shared/card.ts'
@@ -134,6 +135,71 @@ app.post('/api/sessions', (req, res) => {
     console.error('[sessions] failed:', err)
     res.status(500).json({ error: 'save failed' })
   }
+})
+
+// ---- Prediction vs. actual: the trust engine ----
+
+function accuracyPayload(childId: string) {
+  const store = getStore()
+  const predictions = store.getPredictions(childId)
+  const exams = store.getExamResults(childId)
+  const resolved = resolvePredictions(predictions, exams)
+  const calibration = calibrationFrom(resolved)
+  const readiness = computeReport(store.getEngineInput(childId, Date.now())).readinessPct
+  return {
+    stats: accuracyStats(resolved),
+    resolved,
+    calibration,
+    readiness,
+    currentBand: predictBand(readiness, calibration),
+  }
+}
+
+app.get('/api/accuracy/:childId', (req, res) => {
+  if (!getStore().getChild(req.params.childId)) return res.status(404).json({ error: 'child not found' })
+  res.json(accuracyPayload(req.params.childId))
+})
+
+// Snapshot a prediction now, so we can honestly check it against real marks later.
+app.post('/api/predictions', (req, res) => {
+  const b = req.body ?? {}
+  const childId = String(b.childId ?? '')
+  const store = getStore()
+  if (!store.getChild(childId)) return res.status(404).json({ error: 'child not found' })
+  const now = Date.now()
+  const readiness = computeReport(store.getEngineInput(childId, now)).readinessPct
+  const cal = calibrationFrom(resolvePredictions(store.getPredictions(childId), store.getExamResults(childId)))
+  const band = predictBand(readiness, cal)
+  const prediction = {
+    childId,
+    subject: String(b.subject ?? 'Maths'),
+    examType: String(b.examType ?? 'school_ut'),
+    point: band.point,
+    low: band.low,
+    high: band.high,
+    basisReadiness: readiness,
+    madeAt: now,
+  }
+  const id = store.addPrediction(prediction)
+  res.json({ id, prediction })
+})
+
+// Parent enters the child's real exam marks — resolves the matching prediction.
+app.post('/api/exams', (req, res) => {
+  const b = req.body ?? {}
+  const childId = String(b.childId ?? '')
+  const marks = Number(b.marks)
+  const store = getStore()
+  if (!store.getChild(childId)) return res.status(404).json({ error: 'child not found' })
+  if (!Number.isFinite(marks) || marks < 0 || marks > 100) return res.status(400).json({ error: 'marks must be 0-100' })
+  store.addExamResult({
+    childId,
+    subject: String(b.subject ?? 'Maths'),
+    examType: String(b.examType ?? 'school_ut'),
+    marks,
+    date: typeof b.date === 'number' ? b.date : Date.now(),
+  })
+  res.json(accuracyPayload(childId))
 })
 
 app.post('/api/send-card', async (req, res) => {

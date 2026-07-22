@@ -5,6 +5,7 @@
 import Database from 'better-sqlite3'
 import { randomUUID } from 'node:crypto'
 import type { AnswerEvent, EngineInput, ExamEvent, SessionEvent } from '../../src/engine/types.ts'
+import type { ExamResult, Prediction } from '../../src/engine/accuracy.ts'
 
 export interface ChildRecord {
   id: string
@@ -29,7 +30,10 @@ export interface Store {
   getChild(id: string): ChildRecord | null
   addSession(s: SessionEvent): void
   addAnswers(a: AnswerEvent[]): void
-  addExam(e: ExamEvent): void
+  addExamResult(e: ExamResult): void
+  addPrediction(p: Prediction): string
+  getPredictions(childId: string): Prediction[]
+  getExamResults(childId: string): ExamResult[]
   /** everything the engine needs for one child, as of `asOf`. */
   getEngineInput(childId: string, asOf: number): EngineInput
   close(): void
@@ -53,11 +57,16 @@ CREATE TABLE IF NOT EXISTS answers (
   response_time_sec REAL, answer_changed INTEGER, skipped INTEGER, position INTEGER, timestamp INTEGER
 );
 CREATE TABLE IF NOT EXISTS exams (
-  id TEXT PRIMARY KEY, child_id TEXT NOT NULL, parent_entered_marks REAL, exam_type TEXT, date INTEGER
+  id TEXT PRIMARY KEY, child_id TEXT NOT NULL, subject TEXT, parent_entered_marks REAL, exam_type TEXT, date INTEGER
+);
+CREATE TABLE IF NOT EXISTS predictions (
+  id TEXT PRIMARY KEY, child_id TEXT NOT NULL, subject TEXT, exam_type TEXT,
+  point REAL, low REAL, high REAL, basis_readiness REAL, made_at INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_answers_child ON answers(child_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_child ON sessions(child_id);
 CREATE INDEX IF NOT EXISTS idx_exams_child ON exams(child_id);
+CREATE INDEX IF NOT EXISTS idx_predictions_child ON predictions(child_id);
 `
 
 export class SqliteStore implements Store {
@@ -67,6 +76,12 @@ export class SqliteStore implements Store {
     this.db = new Database(path)
     this.db.pragma('journal_mode = WAL')
     this.db.exec(SCHEMA)
+    // migration for DBs created before `subject` existed on exams
+    try {
+      this.db.exec('ALTER TABLE exams ADD COLUMN subject TEXT')
+    } catch {
+      /* column already present */
+    }
   }
 
   isEmpty(): boolean {
@@ -157,13 +172,60 @@ export class SqliteStore implements Store {
     insertMany(answers)
   }
 
-  addExam(e: ExamEvent): void {
+  addExamResult(e: ExamResult): void {
     this.db
       .prepare(
-        `INSERT INTO exams (id, child_id, parent_entered_marks, exam_type, date)
-         VALUES (@id, @childId, @marks, @examType, @date)`,
+        `INSERT INTO exams (id, child_id, subject, parent_entered_marks, exam_type, date)
+         VALUES (@id, @childId, @subject, @marks, @examType, @date)`,
       )
-      .run({ id: randomUUID(), childId: e.childId, marks: e.parentEnteredMarks, examType: e.examType, date: e.date })
+      .run({ id: randomUUID(), childId: e.childId, subject: e.subject, marks: e.marks, examType: e.examType, date: e.date })
+  }
+
+  addPrediction(p: Prediction): string {
+    const id = p.id ?? randomUUID()
+    this.db
+      .prepare(
+        `INSERT INTO predictions (id, child_id, subject, exam_type, point, low, high, basis_readiness, made_at)
+         VALUES (@id, @childId, @subject, @examType, @point, @low, @high, @basisReadiness, @madeAt)`,
+      )
+      .run({
+        id,
+        childId: p.childId,
+        subject: p.subject,
+        examType: p.examType,
+        point: p.point,
+        low: p.low,
+        high: p.high,
+        basisReadiness: p.basisReadiness,
+        madeAt: p.madeAt,
+      })
+    return id
+  }
+
+  getPredictions(childId: string): Prediction[] {
+    const rows = this.db.prepare('SELECT * FROM predictions WHERE child_id = ?').all(childId) as Record<string, unknown>[]
+    return rows.map((r) => ({
+      id: r.id as string,
+      childId: r.child_id as string,
+      subject: r.subject as string,
+      examType: r.exam_type as string,
+      point: r.point as number,
+      low: r.low as number,
+      high: r.high as number,
+      basisReadiness: r.basis_readiness as number,
+      madeAt: r.made_at as number,
+    }))
+  }
+
+  getExamResults(childId: string): ExamResult[] {
+    const rows = this.db.prepare('SELECT * FROM exams WHERE child_id = ?').all(childId) as Record<string, unknown>[]
+    return rows.map((r) => ({
+      childId: r.child_id as string,
+      subject: (r.subject as string) ?? 'Maths',
+      examType: r.exam_type as string,
+      marks: r.parent_entered_marks as number,
+      date: r.date as number,
+    }))
   }
 
   getEngineInput(childId: string, asOf: number): EngineInput {

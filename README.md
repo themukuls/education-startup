@@ -123,17 +123,35 @@ child's profile, and the longitudinal record accumulates (the moat).
 
 Data lives in `parentproof.db` (gitignored; set `DB_PATH` to relocate).
 
-`npm test` covers the engine (10), question guardrail (8), language guardrail
-(7), WhatsApp formatting (5), and the store (3) — 33 tests.
+## Prediction vs. actual — the trust engine (`/accuracy`)
+
+The moat. Every school exam, the parent enters real marks; we check the
+prediction we **actually made** (a stored snapshot) against the actual — and
+show misses, not just hits.
+
+- `src/engine/accuracy.ts` — `predictBand` (calibrated centre + under-claim-early
+  widening), `resolvePredictions` (pair each exam to the prediction made before
+  it), `accuracyStats` (within-±8%, mean abs error, bias), `calibrationFrom`.
+  Pure + 10 unit tests.
+- `predictions` table snapshots each prediction; `POST /api/exams` records marks
+  and resolves the match; `GET /api/accuracy/:childId` returns the track record.
+  Predictions self-calibrate from past bias.
+- The Accuracy screen shows the headline "within ±8% on N of M exams", the live
+  board band, the per-exam record (honest about the one miss), and an
+  enter-marks form. Reached from the Term Audit's predicted-boards tile.
+
+`npm test` covers the engine (10), accuracy (10), question guardrail (8),
+language guardrail (7), WhatsApp formatting (5), and the store (3) — 43 tests.
 
 ## What's next
 
 - **Accounts + auth** — multi-parent/child on top of the store (schema already
   has `parents`/`children`); wire the DPDP consent/export/delete actions.
 - **Payments** (Razorpay/UPI) to make the paywall real.
-- **Prediction vs. actual** — the `exams` table + `parentEnteredMarks` are in
-  place; capture school marks and publish the accuracy track record (the moat).
-- **Real generation quality** — needs an `ANTHROPIC_API_KEY`.
+- **Aggregate accuracy** — publish the cross-cohort "within ±8% for X% of
+  children" stat (per-child track record is live).
+- **Deploy** — swap `SqliteStore` for a `PostgresStore` (the interface is ready)
+  and host; add real `ANTHROPIC_API_KEY` / WhatsApp credentials.
 
 ## Run it
 

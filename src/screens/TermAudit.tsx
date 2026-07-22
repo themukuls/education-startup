@@ -1,3 +1,4 @@
+import { useNavigate } from 'react-router-dom'
 import PhoneFrame from '../components/PhoneFrame'
 import BottomNav from '../components/BottomNav'
 import { useApp } from '../state/AppContext'
@@ -7,6 +8,7 @@ const BAR_COLORS = ['#E7DFD2', '#CBB98F', '#8CA0E4', c.blue]
 
 // Screen 11 — Term Audit ★ the killer artifact. Longitudinal ledger — "is your ₹X working?"
 export default function TermAudit() {
+  const nav = useNavigate()
   const { child, report } = useApp()
   const spend = child.monthlySpend.toLocaleString('en-IN')
 
@@ -81,11 +83,11 @@ export default function TermAudit() {
 
       {/* predicted + gaps */}
       <div style={{ display: 'flex', gap: 10, marginBottom: 'auto' }}>
-        <div style={{ flex: 1, background: c.blueWash, borderRadius: 14, padding: '14px 15px' }}>
+        <button onClick={() => nav('/accuracy')} style={{ flex: 1, textAlign: 'left', background: c.blueWash, border: 'none', borderRadius: 14, padding: '14px 15px' }}>
           <div style={{ fontSize: 11.5, color: c.blueMid, fontWeight: 800, marginBottom: 4 }}>PREDICTED BOARDS</div>
           <div style={{ fontFamily: serif, fontSize: 24, fontWeight: 700, color: c.blueDeep }}>{lo}–{hi}%</div>
-          <div style={{ fontSize: 11.5, color: c.blueMid, fontWeight: 600 }}>±8% band</div>
-        </div>
+          <div style={{ fontSize: 11.5, color: c.blue, fontWeight: 700 }}>How accurate? →</div>
+        </button>
         <div style={{ flex: 1, background: c.white, border: `1px solid ${c.line2}`, borderRadius: 14, padding: '14px 15px' }}>
           <div style={{ fontSize: 11.5, color: c.ink3, fontWeight: 800, marginBottom: 4 }}>ON TRACK</div>
           <div style={{ fontFamily: serif, fontSize: 24, fontWeight: 700 }}>{gapsClosed} of {gapsTotal}</div>
