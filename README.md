@@ -102,18 +102,38 @@ The rendered card ships to parents over WhatsApp two ways
   business-initiated sends), and returns a **mock preview** (message + `wa.me`
   link) otherwise — so the flow is exercisable without credentials.
 
+## Persistence (`server/db/`)
+
+The child's answered-question history is now **real and durable**. A completed
+test writes events to SQLite; the engine computes every report from that stored
+history instead of synthetic data — so taking a test permanently changes the
+child's profile, and the longitudinal record accumulates (the moat).
+
+- `server/db/store.ts` — a narrow `Store` interface + `SqliteStore`
+  (better-sqlite3). Swapping to Postgres later means one more implementation;
+  nothing else changes.
+- On first boot the store **seeds** Mukul's synthetic history so the demo starts
+  full — but it's now editable, persisted data.
+- `GET /api/report/:childId` computes from stored events · `POST /api/sessions`
+  records a completed test and returns the recomputed report · `GET
+  /api/child/:childId`.
+- The kid test captures real per-question events (timing, correctness,
+  answer-changes) and posts them; `AppContext` shows the stored report (with a
+  synthetic offline fallback) and refreshes after each test.
+
+Data lives in `parentproof.db` (gitignored; set `DB_PATH` to relocate).
+
 `npm test` covers the engine (10), question guardrail (8), language guardrail
-(7), and WhatsApp formatting (5) — 30 tests.
+(7), WhatsApp formatting (5), and the store (3) — 33 tests.
 
 ## What's next
 
-- **Real generation quality** — needs an `ANTHROPIC_API_KEY`; run a batch
-  through generate → verify and review accuracy (the metric the business lives
-  on).
-- **Capture the parent's phone** in onboarding / the "You" screen so automated
-  delivery has a recipient (share already works without it).
-- **Prediction vs. actual** — capture `parentEnteredMarks` (already in the event
-  schema) to publish the accuracy track record.
+- **Accounts + auth** — multi-parent/child on top of the store (schema already
+  has `parents`/`children`); wire the DPDP consent/export/delete actions.
+- **Payments** (Razorpay/UPI) to make the paywall real.
+- **Prediction vs. actual** — the `exams` table + `parentEnteredMarks` are in
+  place; capture school marks and publish the accuracy track record (the moat).
+- **Real generation quality** — needs an `ANTHROPIC_API_KEY`.
 
 ## Run it
 
