@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import PhoneFrame from '../components/PhoneFrame'
 import { useApp } from '../state/AppContext'
 import { loadTest, type TestResult } from '../api/quiz'
+import type { RawAnswer } from '../api/persistence'
 import type { Question } from '../shared/quiz'
 import { c, serif } from '../theme'
 
@@ -48,15 +49,40 @@ function PreparingScreen({ name }: { name: string }) {
 
 function TestRunner({ questions }: { questions: Question[] }) {
   const nav = useNavigate()
-  const { child, recordTest } = useApp()
+  const { child, recordTest, recordSession } = useApp()
   const [idx, setIdx] = useState(0)
   const [selected, setSelected] = useState<number | null>(null)
   const [correct, setCorrect] = useState(0)
   const [secondsLeft, setSecondsLeft] = useState(TOTAL_SECONDS)
 
+  // Capture real engine events as the child answers.
+  const eventsRef = useRef<RawAnswer[]>([])
+  const shownAtRef = useRef<number>(Date.now())
+  const changesRef = useRef<number>(0)
+
   const q = questions[idx]
   const total = questions.length
   const initial = (child.name.trim()[0] || 'M').toUpperCase()
+
+  function captureCurrent(chosen: number | null) {
+    eventsRef.current.push({
+      itemId: `q${q.id}`,
+      chapter: q.topic,
+      cogLevel: q.skill,
+      format: q.format ?? (q.skill === 'A' ? 'NUM' : 'MCQ'),
+      itemDifficulty: q.difficulty ?? 0.5,
+      correct: chosen === q.answer,
+      responseTimeSec: Math.max(1, Math.round((Date.now() - shownAtRef.current) / 1000)),
+      answerChanged: changesRef.current > 1,
+      skipped: chosen === null,
+      position: idx + 1,
+    })
+  }
+
+  function select(i: number) {
+    changesRef.current += 1
+    setSelected(i)
+  }
 
   useEffect(() => {
     if (secondsLeft <= 0) {
@@ -77,10 +103,13 @@ function TestRunner({ questions }: { questions: Question[] }) {
   function finish(finalCorrect: number) {
     const score = Math.round((finalCorrect / total) * 100)
     recordTest(score, total)
+    // persist the real events; the report updates from the child's stored history
+    void recordSession(eventsRef.current)
     nav('/audit/complete')
   }
 
   function next() {
+    captureCurrent(selected)
     const nowCorrect = correct + (selected === q.answer ? 1 : 0)
     setCorrect(nowCorrect)
     if (idx + 1 >= total) {
@@ -88,6 +117,8 @@ function TestRunner({ questions }: { questions: Question[] }) {
     } else {
       setIdx(idx + 1)
       setSelected(null)
+      shownAtRef.current = Date.now()
+      changesRef.current = 0
     }
   }
 
@@ -143,7 +174,7 @@ function TestRunner({ questions }: { questions: Question[] }) {
           return (
             <button
               key={i}
-              onClick={() => setSelected(i)}
+              onClick={() => select(i)}
               style={{
                 textAlign: 'left',
                 background: on ? c.blue : c.navy2,

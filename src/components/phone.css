@@ -75,6 +75,11 @@
   overflow-y: auto;
   overflow-x: hidden;
 }
+/* Keep children at their natural height and scroll — otherwise a tall screen's
+   flex items shrink to fit the frame and clip (esp. cards with overflow:hidden). */
+.pp-content > * {
+  flex-shrink: 0;
+}
 
 .pp-home-indicator {
   position: absolute;

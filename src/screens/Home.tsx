@@ -7,7 +7,8 @@ import { c, serif } from '../theme'
 // Screen 08 — Parent home ★ daily anchor. "Where you left off" + one action + hero emotion.
 export default function Home() {
   const nav = useNavigate()
-  const { parentName, child, streak, report } = useApp()
+  const { parentName, child, streak, report, accountStatus, openSaveGate } = useApp()
+  const keepRecord = () => (accountStatus === 'guest' ? openSaveGate() : nav('/upgrade'))
   const readiness = report.readinessPct
   const weeklyDelta = Math.max(1, Math.round(report.velocityPtsPerWeek ?? 0))
 
@@ -77,10 +78,12 @@ export default function Home() {
           <div style={{ fontFamily: serif, fontSize: 18, fontWeight: 600 }}>Thursday</div>
           <div style={{ fontSize: 12, color: c.blue, fontWeight: 700 }}>Re-test the gap</div>
         </button>
-        <button onClick={() => nav('/upgrade')} style={tile}>
+        <button onClick={keepRecord} style={tile}>
           <div style={{ fontSize: 12, color: c.ink3, fontWeight: 700, marginBottom: 4 }}>Free audit</div>
           <div style={{ fontFamily: serif, fontSize: 18, fontWeight: 600 }}>Ends in 4d</div>
-          <div style={{ fontSize: 12, color: c.red, fontWeight: 700 }}>Keep the record →</div>
+          <div style={{ fontSize: 12, color: c.red, fontWeight: 700 }}>
+            {accountStatus === 'guest' ? 'Save the record →' : 'Keep the record →'}
+          </div>
         </button>
       </div>
     </PhoneFrame>

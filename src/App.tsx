@@ -11,6 +11,7 @@ import FixPlan from './screens/FixPlan'
 import Milestone from './screens/Milestone'
 import TermAudit from './screens/TermAudit'
 import Tracker from './screens/Tracker'
+import Accuracy from './screens/Accuracy'
 import Upgrade from './screens/Upgrade'
 import You from './screens/You'
 
@@ -30,6 +31,7 @@ export default function App() {
         <Route path="/milestone" element={<Milestone />} />
         <Route path="/term-audit" element={<TermAudit />} />
         <Route path="/tracker" element={<Tracker />} />
+        <Route path="/accuracy" element={<Accuracy />} />
         <Route path="/upgrade" element={<Upgrade />} />
         <Route path="/you" element={<You />} />
         <Route path="*" element={<Navigate to="/" replace />} />

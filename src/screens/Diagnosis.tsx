@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import PhoneFrame from '../components/PhoneFrame'
 import { useApp } from '../state/AppContext'
@@ -8,8 +9,19 @@ import { c, serif } from '../theme'
 // Screen 07 — Diagnosis Card ★ hero artifact. Variable reward + shareable social proof.
 export default function Diagnosis() {
   const nav = useNavigate()
-  const { child, parentPhone, lastScore } = useApp()
+  const { child, parentPhone, lastScore, accountStatus, afterTestPrompted, openSaveGate, markAfterTestPrompted } = useApp()
   const readiness = lastScore ?? 61
+
+  // They just finished a test and got a real result — the moment to offer saving
+  // it. Guests only, once per session, and only after actually taking the test.
+  useEffect(() => {
+    if (accountStatus === 'guest' && lastScore != null && !afterTestPrompted) {
+      markAfterTestPrompted()
+      const t = setTimeout(openSaveGate, 1400)
+      return () => clearTimeout(t)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accountStatus, lastScore, afterTestPrompted])
 
   // The shareable Diagnosis Card, as a WhatsApp message.
   const diagnosisCard: CardCopy = {

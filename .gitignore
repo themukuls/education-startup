@@ -3,6 +3,11 @@ dist
 dist-ssr
 *.local
 *.tsbuildinfo
+
+# Local database
+*.db
+*.db-shm
+*.db-wal
 .DS_Store
 .env
 .env.*

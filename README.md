@@ -102,18 +102,76 @@ The rendered card ships to parents over WhatsApp two ways
   business-initiated sends), and returns a **mock preview** (message + `wa.me`
   link) otherwise — so the flow is exercisable without credentials.
 
-`npm test` covers the engine (10), question guardrail (8), language guardrail
-(7), and WhatsApp formatting (5) — 30 tests.
+## Persistence (`server/db/`)
+
+The child's answered-question history is now **real and durable**. A completed
+test writes events to SQLite; the engine computes every report from that stored
+history instead of synthetic data — so taking a test permanently changes the
+child's profile, and the longitudinal record accumulates (the moat).
+
+- `server/db/store.ts` — a narrow `Store` interface + `SqliteStore`
+  (better-sqlite3). Swapping to Postgres later means one more implementation;
+  nothing else changes.
+- On first boot the store **seeds** Mukul's synthetic history so the demo starts
+  full — but it's now editable, persisted data.
+- `GET /api/report/:childId` computes from stored events · `POST /api/sessions`
+  records a completed test and returns the recomputed report · `GET
+  /api/child/:childId`.
+- The kid test captures real per-question events (timing, correctness,
+  answer-changes) and posts them; `AppContext` shows the stored report (with a
+  synthetic offline fallback) and refreshes after each test.
+
+Data lives in `parentproof.db` (gitignored; set `DB_PATH` to relocate).
+
+## Prediction vs. actual — the trust engine (`/accuracy`)
+
+The moat. Every school exam, the parent enters real marks; we check the
+prediction we **actually made** (a stored snapshot) against the actual — and
+show misses, not just hits.
+
+- `src/engine/accuracy.ts` — `predictBand` (calibrated centre + under-claim-early
+  widening), `resolvePredictions` (pair each exam to the prediction made before
+  it), `accuracyStats` (within-±8%, mean abs error, bias), `calibrationFrom`.
+  Pure + 10 unit tests.
+- `predictions` table snapshots each prediction; `POST /api/exams` records marks
+  and resolves the match; `GET /api/accuracy/:childId` returns the track record.
+  Predictions self-calibrate from past bias.
+- The Accuracy screen shows the headline "within ±8% on N of M exams", the live
+  board band, the per-exam record (honest about the one miss), and an
+  enter-marks form. Reached from the Term Audit's predicted-boards tile.
+
+`npm test` covers the engine (10), accuracy (10), question guardrail (8),
+language guardrail (7), WhatsApp formatting (5), and the store (3) — 43 tests.
+
+## Guest-first — experience before login
+
+No sign-up to begin. A parent runs the whole audit — take a test, get the
+diagnosis, browse the tracker — as a **guest**, and is only asked for details
+when they want to *keep* something. Value before data capture.
+
+- `AppContext` holds an `accountStatus` of `'guest' | 'claimed'`, persisted to
+  `localStorage` (`pp.status` / `pp.name` / `pp.phone`) so the guest's session
+  survives a reload. `claimAccount(name, phone)` flips the status, saves locally,
+  and best-effort posts to `POST /api/account` (`upsertParent`).
+- `src/components/SaveGate.tsx` — a bottom-sheet that slides up (ppSlideUp /
+  ppScrimIn) asking only for name + WhatsApp number. Rendered inside the phone
+  frame so it overlays any screen. "Not now" keeps them browsing.
+- The gate is offered at the natural moments, guests only: **after a test**
+  (auto-prompt on the Diagnosis card, once per session), and on any *save/keep*
+  intent — Home's "Save the record", the Upgrade CTA (must save before paying),
+  the You screen's account card, and Welcome's "Sign in". Once claimed, those
+  same surfaces show the parent's name/phone instead.
 
 ## What's next
 
-- **Real generation quality** — needs an `ANTHROPIC_API_KEY`; run a batch
-  through generate → verify and review accuracy (the metric the business lives
-  on).
-- **Capture the parent's phone** in onboarding / the "You" screen so automated
-  delivery has a recipient (share already works without it).
-- **Prediction vs. actual** — capture `parentEnteredMarks` (already in the event
-  schema) to publish the accuracy track record.
+- **Accounts + auth** — full multi-parent/child on top of the store and the
+  guest→claimed foundation (schema has `parents`/`children`); wire the DPDP
+  consent/export/delete actions.
+- **Payments** (Razorpay/UPI) to make the paywall real.
+- **Aggregate accuracy** — publish the cross-cohort "within ±8% for X% of
+  children" stat (per-child track record is live).
+- **Deploy** — swap `SqliteStore` for a `PostgresStore` (the interface is ready)
+  and host; add real `ANTHROPIC_API_KEY` / WhatsApp credentials.
 
 ## Run it
 

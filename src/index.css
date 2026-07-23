@@ -76,6 +76,22 @@ a:hover {
     transform: rotate(360deg);
   }
 }
+@keyframes ppSlideUp {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+@keyframes ppScrimIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
 @keyframes ppFadeUp {
   from {
     opacity: 0;

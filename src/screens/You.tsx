@@ -8,9 +8,10 @@ import { c, serif } from '../theme'
 // Screen 13 — You & your children (control). Parent-as-owner + DPDP consent + add-child.
 export default function You() {
   const nav = useNavigate()
-  const { parentName, parentInitial, child } = useApp()
+  const { parentName, parentInitial, parentPhone, child, accountStatus, openSaveGate } = useApp()
   const [appearance, setAppearance] = useState<'Light' | 'Dark'>('Light')
   const [lang, setLang] = useState<'EN' | 'हिं'>('EN')
+  const isGuest = accountStatus === 'guest'
 
   return (
     <PhoneFrame
@@ -22,13 +23,20 @@ export default function You() {
       <h2 style={{ fontFamily: serif, fontWeight: 600, fontSize: 27, lineHeight: 1.1, margin: '0 0 16px' }}>You &amp; your children</h2>
 
       {/* account owner */}
-      <div style={{ background: c.blue, borderRadius: 18, padding: '16px 18px', color: '#EBEFFB', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 14 }}>
-        <div style={{ width: 46, height: 46, borderRadius: '50%', background: c.amber, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, color: c.navy, fontSize: 18, flex: 'none' }}>{parentInitial}</div>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 16, fontWeight: 800, color: '#fff' }}>{parentName} Sharma</div>
-          <div style={{ fontSize: 12.5, color: c.blueInk, fontWeight: 700 }}>Account owner · you control all data</div>
+      <div
+        onClick={isGuest ? openSaveGate : undefined}
+        style={{ background: c.blue, borderRadius: 18, padding: '16px 18px', color: '#EBEFFB', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 14, cursor: isGuest ? 'pointer' : 'default' }}
+      >
+        <div style={{ width: 46, height: 46, borderRadius: '50%', background: c.amber, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, color: c.navy, fontSize: 18, flex: 'none' }}>
+          {isGuest ? '👋' : parentInitial}
         </div>
-        <span style={{ background: 'rgba(255,255,255,.16)', borderRadius: 10, padding: '5px 10px', fontSize: 11, fontWeight: 800 }}>Core</span>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 16, fontWeight: 800, color: '#fff' }}>{isGuest ? 'Guest' : parentName}</div>
+          <div style={{ fontSize: 12.5, color: c.blueInk, fontWeight: 700 }}>
+            {isGuest ? 'Not saved yet — tap to keep your record' : parentPhone || 'Account owner · you control all data'}
+          </div>
+        </div>
+        <span style={{ background: 'rgba(255,255,255,.16)', borderRadius: 10, padding: '5px 10px', fontSize: 11, fontWeight: 800 }}>{isGuest ? 'Guest' : 'Core'}</span>
       </div>
 
       <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', color: c.ink3, marginBottom: 9 }}>Children</div>

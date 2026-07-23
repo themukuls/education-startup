@@ -6,7 +6,7 @@ import { c, serif } from '../theme'
 // Screen 12 — Upgrade (free audit ends). Loss aversion + endowment; anchored pricing.
 export default function Upgrade() {
   const nav = useNavigate()
-  const { child } = useApp()
+  const { child, accountStatus, openSaveGate } = useApp()
 
   return (
     <PhoneFrame time="7:40" contentStyle={{ padding: '18px 22px 24px', color: c.ink }}>
@@ -68,7 +68,12 @@ export default function Upgrade() {
 
       <button
         onClick={() => {
-          alert('Welcome to Core — Mukul’s record is safe.')
+          // guests must save their record (phone) before paying
+          if (accountStatus === 'guest') {
+            openSaveGate()
+            return
+          }
+          alert('Welcome to Core — ' + child.name + '’s record is safe.')
           nav('/home')
         }}
         style={{ width: '100%', background: c.blue, color: '#fff', border: 'none', borderRadius: 16, padding: 19, fontSize: 16.5, fontWeight: 800, fontFamily: 'inherit', boxShadow: '0 10px 22px -8px rgba(35,84,199,.6)', marginTop: 16 }}

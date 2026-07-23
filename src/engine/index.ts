@@ -21,6 +21,7 @@ import { selectHeadline } from './insights'
 import { FLOORS } from './seeds'
 
 export * from './types'
+export * from './accuracy'
 export { FLOORS } from './seeds'
 
 export function computeReport(input: EngineInput, recentHeadlines?: string[]): LearningReport {

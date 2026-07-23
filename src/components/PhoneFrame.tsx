@@ -1,4 +1,5 @@
 import type { CSSProperties, ReactNode } from 'react'
+import SaveGate from './SaveGate'
 import './phone.css'
 
 type Tint = 'dark' | 'light'
@@ -53,6 +54,7 @@ export default function PhoneFrame({
       {footer}
 
       <div className="pp-home-indicator" style={{ background: inkColor }} />
+      <SaveGate />
     </div>
   )
 }
