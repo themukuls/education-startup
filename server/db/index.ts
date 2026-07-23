@@ -1,26 +1,37 @@
-// Store singleton + first-boot seed. Seeding loads Mukul's synthetic history so
-// the demo starts full — but it's now real, persisted data you can add to.
+// Store singleton + first-boot seed. Picks Postgres when DATABASE_URL is set
+// (production), else SQLite (local dev) — the only thing that changes between
+// them is this one line. Seeding loads Mukul's synthetic history so a fresh
+// database starts full, but it's real, persisted data you can add to.
 
-import { SqliteStore, type Store } from './store.ts'
+import { SqliteStore, type Store, type StoreKind } from './store.ts'
+import { PostgresStore } from './postgres.ts'
 import { buildStream } from '../../src/engine/synthetic.ts'
 
 const DB_PATH = process.env.DB_PATH ?? 'parentproof.db'
+const DATABASE_URL = process.env.DATABASE_URL ?? ''
 
-let store: Store | null = null
+export const storeKind: StoreKind = DATABASE_URL ? 'postgres' : 'sqlite'
 
-export function getStore(): Store {
-  if (!store) {
-    store = new SqliteStore(DB_PATH)
-    seedIfEmpty(store)
-  }
-  return store
+let storePromise: Promise<Store> | null = null
+
+/** Resolve the shared Store, creating schema + seeding on first call. */
+export function getStore(): Promise<Store> {
+  if (!storePromise) storePromise = createAndSeed()
+  return storePromise
 }
 
-function seedIfEmpty(s: Store): void {
-  if (!s.isEmpty()) return
+async function createAndSeed(): Promise<Store> {
+  const s: Store = DATABASE_URL ? new PostgresStore(DATABASE_URL) : new SqliteStore(DB_PATH)
+  await s.init()
+  await seedIfEmpty(s)
+  return s
+}
+
+async function seedIfEmpty(s: Store): Promise<void> {
+  if (!(await s.isEmpty())) return
   const now = Date.now()
-  s.upsertParent({ id: 'priya', name: 'Priya Sharma', phone: '' })
-  s.upsertChild({
+  await s.upsertParent({ id: 'priya', name: 'Priya Sharma', phone: '' })
+  await s.upsertChild({
     id: 'mukul',
     parentId: 'priya',
     name: 'Mukul',
@@ -31,8 +42,8 @@ function seedIfEmpty(s: Store): void {
   })
   // anchor the synthetic history to "now" so recency weighting is correct
   const stream = buildStream({ archetype: 'improver', childId: 'mukul', asOf: now, seed: 7 })
-  for (const session of stream.sessions) s.addSession(session)
-  s.addAnswers(stream.answers)
+  for (const session of stream.sessions) await s.addSession(session)
+  await s.addAnswers(stream.answers)
 
   // Seed a believable — and honest (one miss) — prediction track record.
   const WEEK = 7 * 24 * 60 * 60 * 1000
@@ -43,7 +54,7 @@ function seedIfEmpty(s: Store): void {
     { subject: 'Maths', examType: 'school_ut', point: 66, low: 58, high: 74, madeWk: 2, marks: 55, examWk: 1 }, // -11 ✗ (honest miss)
   ]
   for (const t of track) {
-    s.addPrediction({
+    await s.addPrediction({
       childId: 'mukul',
       subject: t.subject,
       examType: t.examType,
@@ -53,9 +64,9 @@ function seedIfEmpty(s: Store): void {
       basisReadiness: t.point,
       madeAt: now - t.madeWk * WEEK,
     })
-    s.addExamResult({ childId: 'mukul', subject: t.subject, examType: t.examType, marks: t.marks, date: now - t.examWk * WEEK })
+    await s.addExamResult({ childId: 'mukul', subject: t.subject, examType: t.examType, marks: t.marks, date: now - t.examWk * WEEK })
   }
   console.log(
-    `[db] seeded Mukul — ${stream.answers.length} answers across ${stream.sessions.length} sessions, ${track.length} predictions`,
+    `[db] seeded Mukul (${storeKind}) — ${stream.answers.length} answers across ${stream.sessions.length} sessions, ${track.length} predictions`,
   )
 }

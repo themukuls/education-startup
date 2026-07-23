@@ -7,7 +7,7 @@ import { randomUUID } from 'node:crypto'
 import { generateTest, hasKey } from './generate.ts'
 import { renderCard } from './render.ts'
 import { sendCard, hasWhatsApp } from './whatsapp.ts'
-import { getStore } from './db/index.ts'
+import { getStore, storeKind } from './db/index.ts'
 import { computeReport } from '../src/engine/index.ts'
 import { predictBand, resolvePredictions, accuracyStats, calibrationFrom } from '../src/engine/accuracy.ts'
 import type { AnswerEvent } from '../src/engine/types.ts'
@@ -16,7 +16,10 @@ import type { RenderRequest, CardCopy } from '../src/shared/card.ts'
 import { normalizePhone } from '../src/shared/whatsapp.ts'
 
 const app = express()
-app.use(cors())
+// Open by default (easy local dev); in production set CORS_ORIGIN to the
+// Vercel origin(s) — comma-separated — so only your frontend can call the API.
+const CORS_ORIGIN = process.env.CORS_ORIGIN?.trim()
+app.use(cors(CORS_ORIGIN ? { origin: CORS_ORIGIN.split(',').map((o) => o.trim()) } : {}))
 app.use(express.json({ limit: '256kb' }))
 
 const PORT = Number(process.env.PORT ?? 8787)
@@ -26,7 +29,7 @@ app.get('/api/health', (_req, res) => {
     ok: true,
     llm: hasKey() ? 'llm' : 'mock',
     whatsapp: hasWhatsApp() ? 'live' : 'mock',
-    db: 'sqlite',
+    db: storeKind,
     model: 'claude-opus-4-8',
   })
 })
@@ -79,18 +82,18 @@ app.post('/api/render-card', async (req, res) => {
 
 // ---- Persistence: a child's real learning record ----
 
-app.get('/api/child/:childId', (req, res) => {
-  const child = getStore().getChild(req.params.childId)
+app.get('/api/child/:childId', async (req, res) => {
+  const child = await (await getStore()).getChild(req.params.childId)
   if (!child) return res.status(404).json({ error: 'child not found' })
   res.json(child)
 })
 
 // Compute the report from the child's STORED event history (not synthetic data).
-app.get('/api/report/:childId', (req, res) => {
-  const store = getStore()
-  if (!store.getChild(req.params.childId)) return res.status(404).json({ error: 'child not found' })
+app.get('/api/report/:childId', async (req, res) => {
+  const store = await getStore()
+  if (!(await store.getChild(req.params.childId))) return res.status(404).json({ error: 'child not found' })
   try {
-    const input = store.getEngineInput(req.params.childId, Date.now())
+    const input = await store.getEngineInput(req.params.childId, Date.now())
     res.json(computeReport(input))
   } catch (err) {
     console.error('[report] failed:', err)
@@ -100,14 +103,14 @@ app.get('/api/report/:childId', (req, res) => {
 
 // Record a completed test: persist the session + its answers, then return the
 // recomputed report so the child's profile updates immediately.
-app.post('/api/sessions', (req, res) => {
+app.post('/api/sessions', async (req, res) => {
   const b = req.body ?? {}
   const childId = String(b.childId ?? '')
   const raw = Array.isArray(b.answers) ? b.answers : []
   if (!childId || raw.length === 0) return res.status(400).json({ error: 'childId and answers required' })
 
-  const store = getStore()
-  if (!store.getChild(childId)) return res.status(404).json({ error: 'child not found' })
+  const store = await getStore()
+  if (!(await store.getChild(childId))) return res.status(404).json({ error: 'child not found' })
 
   const now = Date.now()
   const sessionId = randomUUID()
@@ -128,9 +131,9 @@ app.post('/api/sessions', (req, res) => {
   }))
 
   try {
-    store.addSession({ sessionId, childId, type: 'weekly', assignedAt: now, completed: true, abandonedAtQ: null })
-    store.addAnswers(answers)
-    const report = computeReport(store.getEngineInput(childId, Date.now()))
+    await store.addSession({ sessionId, childId, type: 'weekly', assignedAt: now, completed: true, abandonedAtQ: null })
+    await store.addAnswers(answers)
+    const report = computeReport(await store.getEngineInput(childId, Date.now()))
     res.json({ ok: true, sessionId, report })
   } catch (err) {
     console.error('[sessions] failed:', err)
@@ -140,7 +143,7 @@ app.post('/api/sessions', (req, res) => {
 
 // ---- Account: claim a guest record (lightweight; full auth comes later) ----
 
-app.post('/api/account', (req, res) => {
+app.post('/api/account', async (req, res) => {
   const b = req.body ?? {}
   const name = String(b.name ?? 'Parent').trim() || 'Parent'
   const phone = String(b.phone ?? '').trim()
@@ -149,7 +152,7 @@ app.post('/api/account', (req, res) => {
     // demo has a single parent; a real build keys this by the authed account.
     // A WhatsApp claim may arrive with no phone yet — the inbound webhook fills
     // in the verified number when the parent's message lands (no OTP).
-    getStore().upsertParent({ id: 'priya', name, phone, channel })
+    await (await getStore()).upsertParent({ id: 'priya', name, phone, channel })
     res.json({ ok: true, channel })
   } catch (err) {
     console.error('[account] failed:', err)
@@ -163,7 +166,7 @@ app.post('/api/account', (req, res) => {
 // the sender, so `from` is a trusted number and `[code]` ties it to the guest
 // session — we claim the account and never send an OTP. Mock-safe: with no
 // credentials this still records the parent so the flow is exercisable locally.
-app.post('/api/whatsapp/inbound', (req, res) => {
+app.post('/api/whatsapp/inbound', async (req, res) => {
   const b = req.body ?? {}
   // shape mirrors the Cloud API payload we care about (flattened for the demo)
   const from = normalizePhone(String(b.from ?? b.wa_id ?? ''))
@@ -173,7 +176,7 @@ app.post('/api/whatsapp/inbound', (req, res) => {
   if (!from) return res.status(400).json({ error: 'missing verified sender' })
   try {
     // real build: look up the guest session by `code`; demo keys the one parent
-    getStore().upsertParent({ id: 'priya', name: profileName, phone: from, channel: 'whatsapp' })
+    await (await getStore()).upsertParent({ id: 'priya', name: profileName, phone: from, channel: 'whatsapp' })
     res.json({ ok: true, verified: from, code })
   } catch (err) {
     console.error('[whatsapp inbound] failed:', err)
@@ -183,13 +186,13 @@ app.post('/api/whatsapp/inbound', (req, res) => {
 
 // ---- Prediction vs. actual: the trust engine ----
 
-function accuracyPayload(childId: string) {
-  const store = getStore()
-  const predictions = store.getPredictions(childId)
-  const exams = store.getExamResults(childId)
+async function accuracyPayload(childId: string) {
+  const store = await getStore()
+  const predictions = await store.getPredictions(childId)
+  const exams = await store.getExamResults(childId)
   const resolved = resolvePredictions(predictions, exams)
   const calibration = calibrationFrom(resolved)
-  const readiness = computeReport(store.getEngineInput(childId, Date.now())).readinessPct
+  const readiness = computeReport(await store.getEngineInput(childId, Date.now())).readinessPct
   return {
     stats: accuracyStats(resolved),
     resolved,
@@ -199,20 +202,21 @@ function accuracyPayload(childId: string) {
   }
 }
 
-app.get('/api/accuracy/:childId', (req, res) => {
-  if (!getStore().getChild(req.params.childId)) return res.status(404).json({ error: 'child not found' })
-  res.json(accuracyPayload(req.params.childId))
+app.get('/api/accuracy/:childId', async (req, res) => {
+  const store = await getStore()
+  if (!(await store.getChild(req.params.childId))) return res.status(404).json({ error: 'child not found' })
+  res.json(await accuracyPayload(req.params.childId))
 })
 
 // Snapshot a prediction now, so we can honestly check it against real marks later.
-app.post('/api/predictions', (req, res) => {
+app.post('/api/predictions', async (req, res) => {
   const b = req.body ?? {}
   const childId = String(b.childId ?? '')
-  const store = getStore()
-  if (!store.getChild(childId)) return res.status(404).json({ error: 'child not found' })
+  const store = await getStore()
+  if (!(await store.getChild(childId))) return res.status(404).json({ error: 'child not found' })
   const now = Date.now()
-  const readiness = computeReport(store.getEngineInput(childId, now)).readinessPct
-  const cal = calibrationFrom(resolvePredictions(store.getPredictions(childId), store.getExamResults(childId)))
+  const readiness = computeReport(await store.getEngineInput(childId, now)).readinessPct
+  const cal = calibrationFrom(resolvePredictions(await store.getPredictions(childId), await store.getExamResults(childId)))
   const band = predictBand(readiness, cal)
   const prediction = {
     childId,
@@ -224,26 +228,26 @@ app.post('/api/predictions', (req, res) => {
     basisReadiness: readiness,
     madeAt: now,
   }
-  const id = store.addPrediction(prediction)
+  const id = await store.addPrediction(prediction)
   res.json({ id, prediction })
 })
 
 // Parent enters the child's real exam marks — resolves the matching prediction.
-app.post('/api/exams', (req, res) => {
+app.post('/api/exams', async (req, res) => {
   const b = req.body ?? {}
   const childId = String(b.childId ?? '')
   const marks = Number(b.marks)
-  const store = getStore()
-  if (!store.getChild(childId)) return res.status(404).json({ error: 'child not found' })
+  const store = await getStore()
+  if (!(await store.getChild(childId))) return res.status(404).json({ error: 'child not found' })
   if (!Number.isFinite(marks) || marks < 0 || marks > 100) return res.status(400).json({ error: 'marks must be 0-100' })
-  store.addExamResult({
+  await store.addExamResult({
     childId,
     subject: String(b.subject ?? 'Maths'),
     examType: String(b.examType ?? 'school_ut'),
     marks,
     date: typeof b.date === 'number' ? b.date : Date.now(),
   })
-  res.json(accuracyPayload(childId))
+  res.json(await accuracyPayload(childId))
 })
 
 app.post('/api/send-card', async (req, res) => {

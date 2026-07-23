@@ -25,21 +25,28 @@ export interface ParentRecord {
   channel?: string
 }
 
+// The interface is async so the same seam backs SQLite (sync driver, wrapped)
+// and Postgres (async driver) with no change to callers — swap by env only.
 export interface Store {
-  isEmpty(): boolean
-  upsertParent(p: ParentRecord): void
-  upsertChild(c: ChildRecord): void
-  getChild(id: string): ChildRecord | null
-  addSession(s: SessionEvent): void
-  addAnswers(a: AnswerEvent[]): void
-  addExamResult(e: ExamResult): void
-  addPrediction(p: Prediction): string
-  getPredictions(childId: string): Prediction[]
-  getExamResults(childId: string): ExamResult[]
+  /** create schema + run migrations. Call once before use. */
+  init(): Promise<void>
+  isEmpty(): Promise<boolean>
+  upsertParent(p: ParentRecord): Promise<void>
+  upsertChild(c: ChildRecord): Promise<void>
+  getChild(id: string): Promise<ChildRecord | null>
+  addSession(s: SessionEvent): Promise<void>
+  addAnswers(a: AnswerEvent[]): Promise<void>
+  addExamResult(e: ExamResult): Promise<void>
+  addPrediction(p: Prediction): Promise<string>
+  getPredictions(childId: string): Promise<Prediction[]>
+  getExamResults(childId: string): Promise<ExamResult[]>
   /** everything the engine needs for one child, as of `asOf`. */
-  getEngineInput(childId: string, asOf: number): EngineInput
-  close(): void
+  getEngineInput(childId: string, asOf: number): Promise<EngineInput>
+  close(): Promise<void>
 }
+
+/** The backend a Store speaks to — surfaced on /api/health. */
+export type StoreKind = 'sqlite' | 'postgres'
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS parents (
@@ -77,6 +84,9 @@ export class SqliteStore implements Store {
   constructor(path: string) {
     this.db = new Database(path)
     this.db.pragma('journal_mode = WAL')
+  }
+
+  async init(): Promise<void> {
     this.db.exec(SCHEMA)
     // migration for DBs created before `subject` existed on exams
     try {
@@ -92,12 +102,12 @@ export class SqliteStore implements Store {
     }
   }
 
-  isEmpty(): boolean {
+  async isEmpty(): Promise<boolean> {
     const row = this.db.prepare('SELECT COUNT(*) AS n FROM children').get() as { n: number }
     return row.n === 0
   }
 
-  upsertParent(p: ParentRecord): void {
+  async upsertParent(p: ParentRecord): Promise<void> {
     this.db
       .prepare(
         `INSERT INTO parents (id, name, phone, link_channel, created_at)
@@ -109,7 +119,7 @@ export class SqliteStore implements Store {
       .run({ ...p, channel: p.channel ?? 'manual', createdAt: Date.now() })
   }
 
-  upsertChild(c: ChildRecord): void {
+  async upsertChild(c: ChildRecord): Promise<void> {
     this.db
       .prepare(
         `INSERT INTO children (id, parent_id, name, board, klass, subjects, monthly_spend, created_at)
@@ -119,7 +129,7 @@ export class SqliteStore implements Store {
       .run({ ...c, subjects: JSON.stringify(c.subjects), createdAt: Date.now() })
   }
 
-  getChild(id: string): ChildRecord | null {
+  async getChild(id: string): Promise<ChildRecord | null> {
     const r = this.db.prepare('SELECT * FROM children WHERE id = ?').get(id) as
       | Record<string, unknown>
       | undefined
@@ -135,7 +145,7 @@ export class SqliteStore implements Store {
     }
   }
 
-  addSession(s: SessionEvent): void {
+  async addSession(s: SessionEvent): Promise<void> {
     this.db
       .prepare(
         `INSERT OR REPLACE INTO sessions (id, child_id, type, assigned_at, completed, abandoned_at_q, created_at)
@@ -152,7 +162,7 @@ export class SqliteStore implements Store {
       })
   }
 
-  addAnswers(answers: AnswerEvent[]): void {
+  async addAnswers(answers: AnswerEvent[]): Promise<void> {
     const stmt = this.db.prepare(
       `INSERT OR REPLACE INTO answers
        (id, session_id, child_id, item_id, chapter, cog_level, format, item_difficulty, correct,
@@ -183,7 +193,7 @@ export class SqliteStore implements Store {
     insertMany(answers)
   }
 
-  addExamResult(e: ExamResult): void {
+  async addExamResult(e: ExamResult): Promise<void> {
     this.db
       .prepare(
         `INSERT INTO exams (id, child_id, subject, parent_entered_marks, exam_type, date)
@@ -192,7 +202,7 @@ export class SqliteStore implements Store {
       .run({ id: randomUUID(), childId: e.childId, subject: e.subject, marks: e.marks, examType: e.examType, date: e.date })
   }
 
-  addPrediction(p: Prediction): string {
+  async addPrediction(p: Prediction): Promise<string> {
     const id = p.id ?? randomUUID()
     this.db
       .prepare(
@@ -213,7 +223,7 @@ export class SqliteStore implements Store {
     return id
   }
 
-  getPredictions(childId: string): Prediction[] {
+  async getPredictions(childId: string): Promise<Prediction[]> {
     const rows = this.db.prepare('SELECT * FROM predictions WHERE child_id = ?').all(childId) as Record<string, unknown>[]
     return rows.map((r) => ({
       id: r.id as string,
@@ -228,7 +238,7 @@ export class SqliteStore implements Store {
     }))
   }
 
-  getExamResults(childId: string): ExamResult[] {
+  async getExamResults(childId: string): Promise<ExamResult[]> {
     const rows = this.db.prepare('SELECT * FROM exams WHERE child_id = ?').all(childId) as Record<string, unknown>[]
     return rows.map((r) => ({
       childId: r.child_id as string,
@@ -239,7 +249,7 @@ export class SqliteStore implements Store {
     }))
   }
 
-  getEngineInput(childId: string, asOf: number): EngineInput {
+  async getEngineInput(childId: string, asOf: number): Promise<EngineInput> {
     const answerRows = this.db.prepare('SELECT * FROM answers WHERE child_id = ?').all(childId) as Record<string, unknown>[]
     const sessionRows = this.db.prepare('SELECT * FROM sessions WHERE child_id = ?').all(childId) as Record<string, unknown>[]
     const examRows = this.db.prepare('SELECT * FROM exams WHERE child_id = ?').all(childId) as Record<string, unknown>[]
@@ -277,7 +287,7 @@ export class SqliteStore implements Store {
     return { childId, asOf, answers, sessions, exams }
   }
 
-  close(): void {
+  async close(): Promise<void> {
     this.db.close()
   }
 }

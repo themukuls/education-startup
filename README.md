@@ -109,9 +109,12 @@ test writes events to SQLite; the engine computes every report from that stored
 history instead of synthetic data — so taking a test permanently changes the
 child's profile, and the longitudinal record accumulates (the moat).
 
-- `server/db/store.ts` — a narrow `Store` interface + `SqliteStore`
-  (better-sqlite3). Swapping to Postgres later means one more implementation;
-  nothing else changes.
+- `server/db/store.ts` — a narrow async `Store` interface with two
+  implementations: `SqliteStore` (better-sqlite3, local dev) and `PostgresStore`
+  (`server/db/postgres.ts`, `pg`, production). `getStore()` picks Postgres when
+  `DATABASE_URL` is set, SQLite otherwise — that one env var is the entire swap,
+  nothing else in the app changes. Both are verified against the same seed/report
+  path (identical output).
 - On first boot the store **seeds** Mukul's synthetic history so the demo starts
   full — but it's now editable, persisted data.
 - `GET /api/report/:childId` computes from stored events · `POST /api/sessions`
@@ -121,7 +124,9 @@ child's profile, and the longitudinal record accumulates (the moat).
   answer-changes) and posts them; `AppContext` shows the stored report (with a
   synthetic offline fallback) and refreshes after each test.
 
-Data lives in `parentproof.db` (gitignored; set `DB_PATH` to relocate).
+Locally, data lives in `parentproof.db` (gitignored; set `DB_PATH` to relocate).
+In production, set `DATABASE_URL` and it lives in Postgres instead (see
+**Hosting** below).
 
 ## Prediction vs. actual — the trust engine (`/accuracy`)
 
@@ -214,8 +219,34 @@ chrome on the real screens.
 - **Payments** (Razorpay/UPI) to make the paywall real.
 - **Aggregate accuracy** — publish the cross-cohort "within ±8% for X% of
   children" stat (per-child track record is live).
-- **Deploy** — swap `SqliteStore` for a `PostgresStore` (the interface is ready)
-  and host; add real `ANTHROPIC_API_KEY` / WhatsApp credentials.
+
+## Hosting
+
+The frontend is a static build (Vercel today). The backend + database can't live
+on Vercel-static — Vercel keeps no long-running process and no persistent disk —
+so they need a home of their own. The `PostgresStore` makes that a
+config change, not a rewrite.
+
+**Recommended stack (India-first, DPDP-friendly):**
+
+1. **Database — managed Postgres in Mumbai (`ap-south-1`)**, e.g. Supabase.
+   Keeping minors' learning data in-region is a real DPDP win, and Supabase also
+   gives you auth/storage for the accounts roadmap. Neon / Railway / RDS work
+   identically — the app only needs a `DATABASE_URL`.
+2. **Backend — the Express app as an always-on service** (Render / Railway /
+   Fly). Set `DATABASE_URL`, `ANTHROPIC_API_KEY`, `WHATSAPP_*`, and
+   `CORS_ORIGIN=https://<your-vercel-app>`. On boot it creates its schema and
+   seeds automatically.
+3. **Frontend — Vercel**, built with `VITE_API_BASE=https://<your-backend-url>`
+   (and `VITE_WA_BUSINESS_NUMBER`) so the SPA calls your live API instead of
+   falling back to synthetic data.
+
+The SQLite→Postgres swap is verified end-to-end: pointing `DATABASE_URL` at a
+real Postgres yields byte-identical reports, persisted writes, and the same
+accuracy track record as local SQLite. See `.env.example` for every variable.
+
+Point the frontend elsewhere and the app degrades gracefully — no backend just
+means mock LLM/WhatsApp and the synthetic offline report.
 
 ## Run it
 
