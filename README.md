@@ -224,29 +224,44 @@ chrome on the real screens.
 
 The frontend is a static build (Vercel today). The backend + database can't live
 on Vercel-static — Vercel keeps no long-running process and no persistent disk —
-so they need a home of their own. The `PostgresStore` makes that a
-config change, not a rewrite.
+so they need a home of their own. The `PostgresStore` makes that a config change,
+not a rewrite.
 
-**Recommended stack (India-first, DPDP-friendly):**
+**The stack (India-first, DPDP-friendly):**
 
-1. **Database — managed Postgres in Mumbai (`ap-south-1`)**, e.g. Supabase.
-   Keeping minors' learning data in-region is a real DPDP win, and Supabase also
-   gives you auth/storage for the accounts roadmap. Neon / Railway / RDS work
-   identically — the app only needs a `DATABASE_URL`.
-2. **Backend — the Express app as an always-on service** (Render / Railway /
-   Fly). Set `DATABASE_URL`, `ANTHROPIC_API_KEY`, `WHATSAPP_*`, and
-   `CORS_ORIGIN=https://<your-vercel-app>`. On boot it creates its schema and
-   seeds automatically.
-3. **Frontend — Vercel**, built with `VITE_API_BASE=https://<your-backend-url>`
-   (and `VITE_WA_BUSINESS_NUMBER`) so the SPA calls your live API instead of
-   falling back to synthetic data.
+1. **Database — Supabase Postgres in Mumbai (`ap-south-1`).** In-region storage
+   of minors' data is a real DPDP win; Supabase also brings `pgvector` (for RAG,
+   below) and auth/storage for the roadmap — all on the DB we already use.
+2. **Backend — the Express app as an always-on service** (Render / Railway / Fly).
+   Set `DATABASE_URL`, `ANTHROPIC_API_KEY`, `WHATSAPP_*`, `CORS_ORIGIN`. Boots,
+   creates its schema, seeds.
+3. **Frontend — Vercel**, built with `VITE_API_BASE` pointing at your **own**
+   API domain (below).
+
+**First-party domains only.** The client resolves exactly one critical-path
+host — its API base — and it must be a domain *you* control (`api.parentproof.app`,
+Cloudflare-proxied), never a raw `*.onrender.com` or `*.supabase.co`. The
+database is reached **server-side only**, so `*.supabase.co` never enters the
+client's critical path at all (the React app has no Supabase SDK). This lets you
+re-point origins with a DNS change instead of forcing every old install onto a
+new build. Full runbook — Supabase connection specifics, the Cloudflare setup,
+and the rule for future vendor SDKs — in **[`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)**.
 
 The SQLite→Postgres swap is verified end-to-end: pointing `DATABASE_URL` at a
 real Postgres yields byte-identical reports, persisted writes, and the same
 accuracy track record as local SQLite. See `.env.example` for every variable.
+Point the frontend at no backend and the app degrades gracefully — mock
+LLM/WhatsApp and the synthetic offline report.
 
-Point the frontend elsewhere and the app degrades gracefully — no backend just
-means mock LLM/WhatsApp and the synthetic offline report.
+## LLM providers & RAG (planned)
+
+The model layer is deliberately small and swappable, and the safety contract —
+**the engine owns every number; the LLM only writes questions and prose** —
+makes the provider choice a detail, not a risk. The plan to go multi-provider
+(Gemini / Claude / …) and add retrieval (RAG) is written up in
+**[`docs/LLM_AND_RAG.md`](docs/LLM_AND_RAG.md)**: a provider interface behind
+`server/llm/`, syllabus retrieval on Supabase `pgvector`, and the guardrails that
+stay identical no matter which model answers.
 
 ## Run it
 
