@@ -149,13 +149,26 @@ No sign-up to begin. A parent runs the whole audit — take a test, get the
 diagnosis, browse the tracker — as a **guest**, and is only asked for details
 when they want to *keep* something. Value before data capture.
 
-- `AppContext` holds an `accountStatus` of `'guest' | 'claimed'`, persisted to
-  `localStorage` (`pp.status` / `pp.name` / `pp.phone`) so the guest's session
-  survives a reload. `claimAccount(name, phone)` flips the status, saves locally,
-  and best-effort posts to `POST /api/account` (`upsertParent`).
+- `AppContext` holds an `accountStatus` of `'guest' | 'claimed'` and a
+  `parentChannel` (`'whatsapp' | 'manual'`), persisted to `localStorage`
+  (`pp.status` / `pp.name` / `pp.phone` / `pp.channel`) so the guest's session
+  survives a reload. `claimAccount(name, phone, channel)` flips the status, saves
+  locally, and best-effort posts to `POST /api/account` (`upsertParent`).
 - `src/components/SaveGate.tsx` — a bottom-sheet that slides up (ppSlideUp /
-  ppScrimIn) asking only for name + WhatsApp number. Rendered inside the phone
-  frame so it overlays any screen. "Not now" keeps them browsing.
+  ppScrimIn), rendered inside the phone frame so it overlays any screen. "Not
+  now" keeps them browsing.
+
+**WhatsApp is the login — no OTP on the phone.** On a phone the parent's own
+WhatsApp is already installed and verified, so there is nothing to verify again:
+"Continue with WhatsApp" opens their WhatsApp composing a linking message to our
+Business number (`waAccountLink`, with a short correlation code). *Sending* it
+identifies them by their WhatsApp-verified number — zero passwords, zero OTP,
+zero typing. The loop closes server-side at `POST /api/whatsapp/inbound`, where
+Meta delivers the inbound message: the sender is already trusted, so we fill in
+the verified number and profile name and mark the account claimed. A "type your
+number instead" toggle stays as the desktop fallback (`channel: 'manual'`). Set
+`VITE_WA_BUSINESS_NUMBER` to point at the real Business sender; unset, the link
+opens the WhatsApp composer so the flow is still demoable.
 - The gate is offered at the natural moments, guests only: **after a test**
   (auto-prompt on the Diagnosis card, once per session), and on any *save/keep*
   intent — Home's "Save the record", the Upgrade CTA (must save before paying),

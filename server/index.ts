@@ -13,6 +13,7 @@ import { predictBand, resolvePredictions, accuracyStats, calibrationFrom } from 
 import type { AnswerEvent } from '../src/engine/types.ts'
 import { toQuestions, type GenerateRequest } from '../src/shared/quiz.ts'
 import type { RenderRequest, CardCopy } from '../src/shared/card.ts'
+import { normalizePhone } from '../src/shared/whatsapp.ts'
 
 const app = express()
 app.use(cors())
@@ -143,13 +144,40 @@ app.post('/api/account', (req, res) => {
   const b = req.body ?? {}
   const name = String(b.name ?? 'Parent').trim() || 'Parent'
   const phone = String(b.phone ?? '').trim()
+  const channel = b.channel === 'whatsapp' ? 'whatsapp' : 'manual'
   try {
-    // demo has a single parent; a real build keys this by the authed account
-    getStore().upsertParent({ id: 'priya', name, phone })
-    res.json({ ok: true })
+    // demo has a single parent; a real build keys this by the authed account.
+    // A WhatsApp claim may arrive with no phone yet — the inbound webhook fills
+    // in the verified number when the parent's message lands (no OTP).
+    getStore().upsertParent({ id: 'priya', name, phone, channel })
+    res.json({ ok: true, channel })
   } catch (err) {
     console.error('[account] failed:', err)
     res.status(500).json({ error: 'account save failed' })
+  }
+})
+
+// ---- WhatsApp inbound webhook: verify-by-message (no OTP) --------------------
+// Where the "log in with WhatsApp" loop closes. When a parent sends our Business
+// number the linking message, Meta POSTs it here. WhatsApp has already verified
+// the sender, so `from` is a trusted number and `[code]` ties it to the guest
+// session — we claim the account and never send an OTP. Mock-safe: with no
+// credentials this still records the parent so the flow is exercisable locally.
+app.post('/api/whatsapp/inbound', (req, res) => {
+  const b = req.body ?? {}
+  // shape mirrors the Cloud API payload we care about (flattened for the demo)
+  const from = normalizePhone(String(b.from ?? b.wa_id ?? ''))
+  const profileName = String(b.name ?? b.profileName ?? 'Parent').trim() || 'Parent'
+  const text = String(b.text ?? b.message ?? '')
+  const code = (text.match(/\[(PP-[A-Z0-9]+)\]/) ?? [])[1] ?? null
+  if (!from) return res.status(400).json({ error: 'missing verified sender' })
+  try {
+    // real build: look up the guest session by `code`; demo keys the one parent
+    getStore().upsertParent({ id: 'priya', name: profileName, phone: from, channel: 'whatsapp' })
+    res.json({ ok: true, verified: from, code })
+  } catch (err) {
+    console.error('[whatsapp inbound] failed:', err)
+    res.status(500).json({ error: 'inbound handling failed' })
   }
 })
 

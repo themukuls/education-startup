@@ -6,6 +6,9 @@ import { saveAccount } from '../api/account'
 
 export type Goal = 'board' | 'weak-subject' | 'habit'
 export type AccountStatus = 'guest' | 'claimed'
+/** How the parent claimed their record. WhatsApp = verified by the phone's own
+ * WhatsApp (no OTP); manual = typed number (desktop fallback). */
+export type LinkChannel = 'whatsapp' | 'manual'
 
 const ls = {
   get: (k: string, fallback = '') => {
@@ -64,14 +67,20 @@ interface AppContextValue extends AppState {
 
   // ---- guest-first / deferred save ----
   accountStatus: AccountStatus
+  /** how they linked (empty while guest). */
+  parentChannel: LinkChannel | ''
   saveGateOpen: boolean
   /** whether we've already nudged them to save after finishing a test (once/session). */
   afterTestPrompted: boolean
   openSaveGate: () => void
   closeSaveGate: () => void
   markAfterTestPrompted: () => void
-  /** claim the guest record: keep name + phone, mark claimed, persist. */
-  claimAccount: (name: string, phone: string) => Promise<void>
+  /**
+   * Claim the guest record. On a phone the parent links via WhatsApp (verified
+   * by their own WhatsApp, no OTP) so `phone` may be empty; on desktop they type
+   * it. Marks claimed and persists locally + best-effort to the backend.
+   */
+  claimAccount: (name: string, phone: string, channel?: LinkChannel) => Promise<void>
 }
 
 const defaultChild: Child = {
@@ -89,6 +98,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [parentPhone, setParentPhone] = useState(() => ls.get('pp.phone', ''))
   const [accountStatus, setAccountStatus] = useState<AccountStatus>(
     () => (ls.get('pp.status', 'guest') === 'claimed' ? 'claimed' : 'guest'),
+  )
+  const [parentChannel, setParentChannel] = useState<LinkChannel | ''>(
+    () => (ls.get('pp.channel', '') === 'whatsapp' ? 'whatsapp' : ls.get('pp.channel', '') === 'manual' ? 'manual' : ''),
   )
   const [saveGateOpen, setSaveGateOpen] = useState(false)
   const [afterTestPrompted, setAfterTestPrompted] = useState(false)
@@ -151,22 +163,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
       },
       accountStatus,
+      parentChannel,
       saveGateOpen,
       afterTestPrompted,
       openSaveGate: () => setSaveGateOpen(true),
       closeSaveGate: () => setSaveGateOpen(false),
       markAfterTestPrompted: () => setAfterTestPrompted(true),
-      claimAccount: async (name, phone) => {
+      claimAccount: async (name, phone, channel = 'manual') => {
         const cleanName = name.trim() || 'Parent'
+        const cleanPhone = phone.trim()
         setParentName(cleanName)
-        setParentPhone(phone.trim())
+        setParentPhone(cleanPhone)
+        setParentChannel(channel)
         setAccountStatus('claimed')
         ls.set('pp.name', cleanName)
-        ls.set('pp.phone', phone.trim())
+        ls.set('pp.phone', cleanPhone)
+        ls.set('pp.channel', channel)
         ls.set('pp.status', 'claimed')
         setSaveGateOpen(false)
         try {
-          await saveAccount(cleanName, phone.trim())
+          await saveAccount(cleanName, cleanPhone, channel)
         } catch (err) {
           console.warn('[state] account not persisted (backend unavailable):', err)
         }
@@ -176,6 +192,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     parentName,
     parentPhone,
     accountStatus,
+    parentChannel,
     saveGateOpen,
     afterTestPrompted,
     child,

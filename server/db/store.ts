@@ -21,6 +21,8 @@ export interface ParentRecord {
   id: string
   name: string
   phone: string
+  /** how they linked: 'whatsapp' (verified by their phone, no OTP) or 'manual'. */
+  channel?: string
 }
 
 export interface Store {
@@ -82,6 +84,12 @@ export class SqliteStore implements Store {
     } catch {
       /* column already present */
     }
+    // migration for DBs created before parents tracked how they linked
+    try {
+      this.db.exec('ALTER TABLE parents ADD COLUMN link_channel TEXT')
+    } catch {
+      /* column already present */
+    }
   }
 
   isEmpty(): boolean {
@@ -92,10 +100,13 @@ export class SqliteStore implements Store {
   upsertParent(p: ParentRecord): void {
     this.db
       .prepare(
-        `INSERT INTO parents (id, name, phone, created_at) VALUES (@id, @name, @phone, @createdAt)
-         ON CONFLICT(id) DO UPDATE SET name=@name, phone=@phone`,
+        `INSERT INTO parents (id, name, phone, link_channel, created_at)
+         VALUES (@id, @name, @phone, @channel, @createdAt)
+         ON CONFLICT(id) DO UPDATE SET name=@name,
+           phone=CASE WHEN @phone != '' THEN @phone ELSE parents.phone END,
+           link_channel=@channel`,
       )
-      .run({ ...p, createdAt: Date.now() })
+      .run({ ...p, channel: p.channel ?? 'manual', createdAt: Date.now() })
   }
 
   upsertChild(c: ChildRecord): void {

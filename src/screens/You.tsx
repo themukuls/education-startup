@@ -8,7 +8,7 @@ import { c, serif } from '../theme'
 // Screen 13 — You & your children (control). Parent-as-owner + DPDP consent + add-child.
 export default function You() {
   const nav = useNavigate()
-  const { parentName, parentInitial, parentPhone, child, accountStatus, openSaveGate } = useApp()
+  const { parentName, parentInitial, parentPhone, parentChannel, child, accountStatus, openSaveGate } = useApp()
   const [appearance, setAppearance] = useState<'Light' | 'Dark'>('Light')
   const [lang, setLang] = useState<'EN' | 'हिं'>('EN')
   const isGuest = accountStatus === 'guest'
@@ -33,7 +33,9 @@ export default function You() {
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 16, fontWeight: 800, color: '#fff' }}>{isGuest ? 'Guest' : parentName}</div>
           <div style={{ fontSize: 12.5, color: c.blueInk, fontWeight: 700 }}>
-            {isGuest ? 'Not saved yet — tap to keep your record' : parentPhone || 'Account owner · you control all data'}
+            {isGuest
+              ? 'Not saved yet — tap to keep your record'
+              : parentPhone || (parentChannel === 'whatsapp' ? 'Linked on WhatsApp ✓' : 'Account owner · you control all data')}
           </div>
         </div>
         <span style={{ background: 'rgba(255,255,255,.16)', borderRadius: 10, padding: '5px 10px', fontSize: 11, fontWeight: 800 }}>{isGuest ? 'Guest' : 'Core'}</span>

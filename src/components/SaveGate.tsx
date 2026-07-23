@@ -1,26 +1,44 @@
 import { useState, type CSSProperties } from 'react'
 import { useApp } from '../state/AppContext'
+import { waAccountLink } from '../shared/whatsapp'
+import { WA_BUSINESS_NUMBER } from '../config'
 import { Diamond } from './ui'
 import { c, serif } from '../theme'
 
 // The deferred sign-up gate. Guests use the whole app freely; this bottom sheet
-// only appears at a moment of commitment (after a test, or a save action) and
-// asks for the minimum — phone + name. No password, skippable. Full auth later.
+// only appears at a moment of commitment (after a test, or a save action).
+//
+// On a phone the login IS WhatsApp: tapping "Continue with WhatsApp" opens the
+// parent's own (already-verified) WhatsApp to message us — no password, no OTP,
+// no typing a number. A manual number field stays as the desktop fallback.
 export default function SaveGate() {
   const { saveGateOpen, closeSaveGate, claimAccount, child } = useApp()
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
+  const [manual, setManual] = useState(false)
   const [saving, setSaving] = useState(false)
 
   if (!saveGateOpen) return null
 
   const validPhone = phone.replace(/\D/g, '').length >= 8
 
-  async function save() {
+  // Phone path: open the parent's WhatsApp to us. Sending identifies them by
+  // their verified number, so there's nothing to verify on the phone.
+  function continueWithWhatsApp() {
+    if (saving) return
+    setSaving(true)
+    const code = 'PP-' + Math.random().toString(36).slice(2, 7).toUpperCase()
+    // Must open synchronously from the click to survive popup blockers.
+    window.open(waAccountLink(WA_BUSINESS_NUMBER, child.name, code), '_blank', 'noopener')
+    claimAccount(name, '', 'whatsapp').finally(() => setSaving(false))
+  }
+
+  // Desktop fallback: they type the number instead.
+  async function saveManual() {
     if (!validPhone || saving) return
     setSaving(true)
     try {
-      await claimAccount(name, phone)
+      await claimAccount(name, phone, 'manual')
     } finally {
       setSaving(false)
     }
@@ -42,45 +60,44 @@ export default function SaveGate() {
           </div>
         </div>
         <p style={{ margin: '0 0 18px', fontSize: 14, color: c.ink2, fontWeight: 500, lineHeight: 1.5 }}>
-          Enter your number so {child.name}&apos;s tests, diagnosis and streak stay yours. No password — we&apos;ll text you the report.
+          Your WhatsApp is your login — no password, no OTP. Tap through and {child.name}&apos;s
+          tests, diagnosis and reports land in your chat.
         </p>
 
         <label style={label}>Your name</label>
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Priya" style={input} />
 
-        <label style={label}>WhatsApp number</label>
-        <input
-          value={phone}
-          onChange={(e) => setPhone(e.target.value)}
-          inputMode="tel"
-          placeholder="+91 —"
-          style={{ ...input, borderColor: validPhone ? c.blue : c.line3 }}
-        />
+        {!manual ? (
+          <>
+            <button onClick={continueWithWhatsApp} disabled={saving} style={waBtn(saving)}>
+              <WaGlyph />
+              {saving ? 'Opening WhatsApp…' : 'Continue with WhatsApp'}
+            </button>
+            <button onClick={() => setManual(true)} style={linkBtn}>
+              On a computer? Enter your number instead
+            </button>
+          </>
+        ) : (
+          <>
+            <label style={label}>WhatsApp number</label>
+            <input
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              inputMode="tel"
+              placeholder="+91 —"
+              autoFocus
+              style={{ ...input, borderColor: validPhone ? c.blue : c.line3 }}
+            />
+            <button onClick={saveManual} disabled={!validPhone || saving} style={blueBtn(!validPhone || saving)}>
+              {saving ? 'Saving…' : 'Save my progress'}
+            </button>
+            <button onClick={() => setManual(false)} style={linkBtn}>
+              ← Use WhatsApp instead
+            </button>
+          </>
+        )}
 
-        <button
-          onClick={save}
-          disabled={!validPhone || saving}
-          style={{
-            width: '100%',
-            background: c.blue,
-            color: '#fff',
-            border: 'none',
-            borderRadius: 16,
-            padding: 17,
-            fontSize: 16,
-            fontWeight: 800,
-            fontFamily: 'inherit',
-            marginTop: 6,
-            opacity: !validPhone || saving ? 0.5 : 1,
-            boxShadow: '0 10px 22px -10px rgba(35,84,199,.6)',
-          }}
-        >
-          {saving ? 'Saving…' : 'Save my progress'}
-        </button>
-        <button
-          onClick={closeSaveGate}
-          style={{ width: '100%', background: 'none', border: 'none', color: c.ink3, fontSize: 14, fontWeight: 700, padding: '14px 0 2px', fontFamily: 'inherit' }}
-        >
+        <button onClick={closeSaveGate} style={{ ...linkBtn, color: c.ink3, marginTop: 2 }}>
           Not now — keep looking around
         </button>
         <p style={{ textAlign: 'center', fontSize: 11.5, color: c.ink4, margin: '8px 0 0', fontWeight: 600 }}>
@@ -88,6 +105,14 @@ export default function SaveGate() {
         </p>
       </div>
     </div>
+  )
+}
+
+function WaGlyph() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="#0A2E1A" aria-hidden style={{ flex: 'none' }}>
+      <path d="M12 2a10 10 0 0 0-8.6 15l-1.3 4.8 4.9-1.3A10 10 0 1 0 12 2Zm5.3 14.1c-.2.6-1.3 1.2-1.8 1.2-.5.1-1 .1-1.7-.1-.4-.1-.9-.3-1.6-.6-2.8-1.2-4.6-4-4.7-4.2-.1-.2-1.1-1.5-1.1-2.8s.7-2 .9-2.2c.2-.3.5-.3.7-.3h.5c.2 0 .4 0 .6.5l.8 2c.1.2.1.3 0 .5l-.4.6c-.1.2-.3.3-.1.6.1.3.6 1.1 1.4 1.7 1 .9 1.7 1.1 2 1.2.2.1.4.1.5-.1l.6-.7c.2-.2.3-.2.6-.1l1.9.9c.3.1.4.2.5.3.1.2.1.7-.1 1.3Z" />
+    </svg>
   )
 }
 
@@ -129,4 +154,47 @@ const input: CSSProperties = {
   background: c.white,
   outline: 'none',
   marginBottom: 14,
+}
+const waBtn = (busy: boolean): CSSProperties => ({
+  width: '100%',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: 10,
+  background: '#25D366',
+  color: '#0A2E1A',
+  border: 'none',
+  borderRadius: 16,
+  padding: 17,
+  fontSize: 16,
+  fontWeight: 800,
+  fontFamily: 'inherit',
+  marginTop: 6,
+  opacity: busy ? 0.6 : 1,
+  boxShadow: '0 10px 22px -10px rgba(37,211,102,.6)',
+})
+const blueBtn = (disabled: boolean): CSSProperties => ({
+  width: '100%',
+  background: c.blue,
+  color: '#fff',
+  border: 'none',
+  borderRadius: 16,
+  padding: 17,
+  fontSize: 16,
+  fontWeight: 800,
+  fontFamily: 'inherit',
+  marginTop: 6,
+  opacity: disabled ? 0.5 : 1,
+  boxShadow: '0 10px 22px -10px rgba(35,84,199,.6)',
+})
+const linkBtn: CSSProperties = {
+  width: '100%',
+  background: 'none',
+  border: 'none',
+  color: c.blue,
+  fontSize: 13.5,
+  fontWeight: 700,
+  padding: '12px 0 2px',
+  fontFamily: 'inherit',
+  cursor: 'pointer',
 }
