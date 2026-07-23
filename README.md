@@ -143,10 +143,30 @@ show misses, not just hits.
 `npm test` covers the engine (10), accuracy (10), question guardrail (8),
 language guardrail (7), WhatsApp formatting (5), and the store (3) — 43 tests.
 
+## Guest-first — experience before login
+
+No sign-up to begin. A parent runs the whole audit — take a test, get the
+diagnosis, browse the tracker — as a **guest**, and is only asked for details
+when they want to *keep* something. Value before data capture.
+
+- `AppContext` holds an `accountStatus` of `'guest' | 'claimed'`, persisted to
+  `localStorage` (`pp.status` / `pp.name` / `pp.phone`) so the guest's session
+  survives a reload. `claimAccount(name, phone)` flips the status, saves locally,
+  and best-effort posts to `POST /api/account` (`upsertParent`).
+- `src/components/SaveGate.tsx` — a bottom-sheet that slides up (ppSlideUp /
+  ppScrimIn) asking only for name + WhatsApp number. Rendered inside the phone
+  frame so it overlays any screen. "Not now" keeps them browsing.
+- The gate is offered at the natural moments, guests only: **after a test**
+  (auto-prompt on the Diagnosis card, once per session), and on any *save/keep*
+  intent — Home's "Save the record", the Upgrade CTA (must save before paying),
+  the You screen's account card, and Welcome's "Sign in". Once claimed, those
+  same surfaces show the parent's name/phone instead.
+
 ## What's next
 
-- **Accounts + auth** — multi-parent/child on top of the store (schema already
-  has `parents`/`children`); wire the DPDP consent/export/delete actions.
+- **Accounts + auth** — full multi-parent/child on top of the store and the
+  guest→claimed foundation (schema has `parents`/`children`); wire the DPDP
+  consent/export/delete actions.
 - **Payments** (Razorpay/UPI) to make the paywall real.
 - **Aggregate accuracy** — publish the cross-cohort "within ±8% for X% of
   children" stat (per-child track record is live).

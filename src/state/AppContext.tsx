@@ -2,8 +2,27 @@ import { createContext, useContext, useEffect, useMemo, useState, type ReactNode
 import { computeReport, type LearningReport } from '../engine'
 import { buildStream } from '../engine/synthetic'
 import { fetchReport, postSession, type RawAnswer } from '../api/persistence'
+import { saveAccount } from '../api/account'
 
 export type Goal = 'board' | 'weak-subject' | 'habit'
+export type AccountStatus = 'guest' | 'claimed'
+
+const ls = {
+  get: (k: string, fallback = '') => {
+    try {
+      return localStorage.getItem(k) ?? fallback
+    } catch {
+      return fallback
+    }
+  },
+  set: (k: string, v: string) => {
+    try {
+      localStorage.setItem(k, v)
+    } catch {
+      /* ignore (private mode) */
+    }
+  },
+}
 
 // Fixed "now" so the offline fallback report is deterministic (no Date.now()).
 const DEMO_ASOF = 1_760_000_000_000
@@ -42,6 +61,17 @@ interface AppContextValue extends AppState {
   recordSession: (answers: RawAnswer[]) => Promise<void>
   /** Computed learning report — from the child's stored history (or synthetic fallback). */
   report: LearningReport
+
+  // ---- guest-first / deferred save ----
+  accountStatus: AccountStatus
+  saveGateOpen: boolean
+  /** whether we've already nudged them to save after finishing a test (once/session). */
+  afterTestPrompted: boolean
+  openSaveGate: () => void
+  closeSaveGate: () => void
+  markAfterTestPrompted: () => void
+  /** claim the guest record: keep name + phone, mark claimed, persist. */
+  claimAccount: (name: string, phone: string) => Promise<void>
 }
 
 const defaultChild: Child = {
@@ -55,8 +85,13 @@ const defaultChild: Child = {
 const AppContext = createContext<AppContextValue | null>(null)
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [parentName, setParentName] = useState('Priya')
-  const [parentPhone] = useState('')
+  const [parentName, setParentName] = useState(() => ls.get('pp.name', 'Priya'))
+  const [parentPhone, setParentPhone] = useState(() => ls.get('pp.phone', ''))
+  const [accountStatus, setAccountStatus] = useState<AccountStatus>(
+    () => (ls.get('pp.status', 'guest') === 'claimed' ? 'claimed' : 'guest'),
+  )
+  const [saveGateOpen, setSaveGateOpen] = useState(false)
+  const [afterTestPrompted, setAfterTestPrompted] = useState(false)
   const [child, setChildState] = useState<Child>(defaultChild)
   const [goal, setGoal] = useState<Goal>('board')
   const [readiness] = useState(68)
@@ -115,8 +150,43 @@ export function AppProvider({ children }: { children: ReactNode }) {
           console.warn('[state] session not persisted (backend unavailable):', err)
         }
       },
+      accountStatus,
+      saveGateOpen,
+      afterTestPrompted,
+      openSaveGate: () => setSaveGateOpen(true),
+      closeSaveGate: () => setSaveGateOpen(false),
+      markAfterTestPrompted: () => setAfterTestPrompted(true),
+      claimAccount: async (name, phone) => {
+        const cleanName = name.trim() || 'Parent'
+        setParentName(cleanName)
+        setParentPhone(phone.trim())
+        setAccountStatus('claimed')
+        ls.set('pp.name', cleanName)
+        ls.set('pp.phone', phone.trim())
+        ls.set('pp.status', 'claimed')
+        setSaveGateOpen(false)
+        try {
+          await saveAccount(cleanName, phone.trim())
+        } catch (err) {
+          console.warn('[state] account not persisted (backend unavailable):', err)
+        }
+      },
     }
-  }, [parentName, parentPhone, child, goal, readiness, weeklyDelta, streak, lastScore, answered, report])
+  }, [
+    parentName,
+    parentPhone,
+    accountStatus,
+    saveGateOpen,
+    afterTestPrompted,
+    child,
+    goal,
+    readiness,
+    weeklyDelta,
+    streak,
+    lastScore,
+    answered,
+    report,
+  ])
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>
 }

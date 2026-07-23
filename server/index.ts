@@ -137,6 +137,22 @@ app.post('/api/sessions', (req, res) => {
   }
 })
 
+// ---- Account: claim a guest record (lightweight; full auth comes later) ----
+
+app.post('/api/account', (req, res) => {
+  const b = req.body ?? {}
+  const name = String(b.name ?? 'Parent').trim() || 'Parent'
+  const phone = String(b.phone ?? '').trim()
+  try {
+    // demo has a single parent; a real build keys this by the authed account
+    getStore().upsertParent({ id: 'priya', name, phone })
+    res.json({ ok: true })
+  } catch (err) {
+    console.error('[account] failed:', err)
+    res.status(500).json({ error: 'account save failed' })
+  }
+})
+
 // ---- Prediction vs. actual: the trust engine ----
 
 function accuracyPayload(childId: string) {

@@ -7,7 +7,7 @@ import { c, serif } from '../theme'
 // Screen 01 — Value-first entry. Value before data capture, no sign-up to begin.
 export default function Welcome() {
   const nav = useNavigate()
-  const { child } = useApp()
+  const { child, openSaveGate } = useApp()
   return (
     <PhoneFrame contentStyle={{ padding: '44px 30px 26px', color: c.ink }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 'auto' }}>
@@ -56,7 +56,10 @@ export default function Welcome() {
         No sign-up needed to begin · 3 free tests
       </p>
       <p style={{ textAlign: 'center', fontSize: 14, color: c.ink2, margin: 0, fontWeight: 500 }}>
-        Already auditing? <span style={{ color: c.blue, fontWeight: 700 }}>Sign in</span>
+        Already auditing?{' '}
+        <span onClick={openSaveGate} style={{ color: c.blue, fontWeight: 700, cursor: 'pointer' }}>
+          Sign in
+        </span>
       </p>
     </PhoneFrame>
   )
