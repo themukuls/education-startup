@@ -1,5 +1,6 @@
 import { useState, type CSSProperties } from 'react'
 import { useApp } from '../state/AppContext'
+import { useIsDesktop } from '../hooks/useBreakpoint'
 import { waAccountLink } from '../shared/whatsapp'
 import { WA_BUSINESS_NUMBER } from '../config'
 import { Diamond } from './ui'
@@ -13,6 +14,7 @@ import { c, serif } from '../theme'
 // no typing a number. A manual number field stays as the desktop fallback.
 export default function SaveGate() {
   const { saveGateOpen, closeSaveGate, claimAccount, child } = useApp()
+  const isDesktop = useIsDesktop()
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
   const [manual, setManual] = useState(false)
@@ -45,9 +47,9 @@ export default function SaveGate() {
   }
 
   return (
-    <div style={scrim} onClick={closeSaveGate}>
-      <div style={sheet} onClick={(e) => e.stopPropagation()}>
-        <div style={{ width: 40, height: 4, background: c.line3, borderRadius: 3, margin: '0 auto 18px' }} />
+    <div style={isDesktop ? scrimCenter : scrim} onClick={closeSaveGate}>
+      <div style={isDesktop ? modal : sheet} onClick={(e) => e.stopPropagation()}>
+        {!isDesktop && <div style={{ width: 40, height: 4, background: c.line3, borderRadius: 3, margin: '0 auto 18px' }} />}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
           <Diamond size={40} />
           <div>
@@ -117,13 +119,19 @@ function WaGlyph() {
 }
 
 const scrim: CSSProperties = {
-  position: 'absolute',
+  position: 'fixed',
   inset: 0,
   background: 'rgba(15,12,8,.5)',
   display: 'flex',
   alignItems: 'flex-end',
   zIndex: 40,
   animation: 'ppScrimIn .2s ease',
+}
+const scrimCenter: CSSProperties = {
+  ...scrim,
+  alignItems: 'center',
+  justifyContent: 'center',
+  padding: 24,
 }
 const sheet: CSSProperties = {
   width: '100%',
@@ -132,6 +140,15 @@ const sheet: CSSProperties = {
   padding: '16px 24px 26px',
   boxShadow: '0 -20px 50px -20px rgba(0,0,0,.4)',
   animation: 'ppSlideUp .3s cubic-bezier(.2,.8,.2,1)',
+}
+const modal: CSSProperties = {
+  width: '100%',
+  maxWidth: 430,
+  background: c.surface,
+  borderRadius: 24,
+  padding: '30px 30px 26px',
+  boxShadow: '0 30px 70px -25px rgba(0,0,0,.5)',
+  animation: 'ppPop .24s cubic-bezier(.2,.8,.2,1)',
 }
 const label: CSSProperties = {
   display: 'block',

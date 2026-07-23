@@ -17,8 +17,7 @@ import You from './screens/You'
 
 export default function App() {
   return (
-    <div className="pp-stage">
-      <Routes>
+    <Routes>
         <Route path="/" element={<Welcome />} />
         <Route path="/onboarding/child" element={<OnboardChild />} />
         <Route path="/onboarding/goal" element={<OnboardGoal />} />
@@ -35,7 +34,6 @@ export default function App() {
         <Route path="/upgrade" element={<Upgrade />} />
         <Route path="/you" element={<You />} />
         <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </div>
+    </Routes>
   )
 }

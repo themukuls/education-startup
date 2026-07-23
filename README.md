@@ -175,8 +175,39 @@ opens the WhatsApp composer so the flow is still demoable.
   the You screen's account card, and Welcome's "Sign in". Once claimed, those
   same surfaces show the parent's name/phone instead.
 
+## Responsive layouts — real screens on phone *and* desktop
+
+The app is no longer a phone-mockup-on-a-backdrop everywhere. It renders as a
+genuine responsive product: a true web layout on laptop/desktop and a
+full-screen mobile app on phones — one codebase, one build, no fake device
+chrome on the real screens.
+
+- `src/hooks/useBreakpoint.ts` — `useIsDesktop()` (breakpoint 960px), the single
+  switch screens read to branch layout.
+- `src/components/AppShell.tsx` (+ `shell.css`) — the product shell. Desktop: a
+  persistent left **sidebar** (logo, "Start a test", nav, account chip) + a wide,
+  centred content column. Phone: content fills the screen with a fixed **bottom
+  nav**. Reflowing grids (`.pp-grid` / `.pp-grid-2`) collapse multi-column
+  dashboards to a single column on phones.
+- `Welcome` is now a real **marketing landing page** on wide screens (sticky nav,
+  two-column hero with a sample Diagnosis Card, the 55%/ASER proof band, a
+  three-step "how it works", and a pricing CTA) and a clean stacked pitch on
+  phones.
+- `Home` is a two-column **dashboard** on desktop (hero + continue-fix on the
+  left, the smaller tiles on the right) and a single column on phones.
+- `SaveGate` adapts too: a centred **modal** on desktop, a **bottom sheet** on
+  phone.
+- `PhoneFrame` (the bezel look) now only wraps the screens not yet migrated —
+  it carries its own centring stage, so migrated full-bleed screens and legacy
+  framed screens coexist during the rollout. **Still on `PhoneFrame` / next to
+  migrate:** Tracker, Accuracy, You, Diagnosis, FixPlan, TermAudit, Milestone,
+  Upgrade, and the onboarding + kid-test funnel.
+
 ## What's next
 
+- **Finish the responsive migration** — move the remaining screens (Tracker,
+  Accuracy, You, the funnel) onto `AppShell` / responsive layouts so every route
+  is first-class on both form factors.
 - **Accounts + auth** — full multi-parent/child on top of the store and the
   guest→claimed foundation (schema has `parents`/`children`); wire the DPDP
   consent/export/delete actions.
@@ -193,8 +224,10 @@ npm install
 npm run dev      # http://localhost:5173
 ```
 
-On a laptop the app renders inside a phone frame (390–400px device). On a real
-phone or a narrow window it fills the screen edge-to-edge.
+On a laptop/desktop the migrated screens render as a full responsive web app
+(sidebar + wide content); on a phone or narrow window they fill the screen with
+a bottom nav. Screens still on the legacy `PhoneFrame` show the centred phone
+device until they're migrated.
 
 ```bash
 npm run build    # type-check + production build to dist/
