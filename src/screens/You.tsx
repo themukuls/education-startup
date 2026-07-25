@@ -94,7 +94,15 @@ export default function You() {
         </div>
       </div>
 
-      <button onClick={() => nav('/')} style={{ background: 'none', border: 'none', color: c.ink3, fontSize: 13.5, fontWeight: 700, marginTop: 16, textAlign: 'center' }}>
+      <button
+        onClick={() => nav('/dev/llm')}
+        style={{ width: '100%', marginTop: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: c.white, border: `1px solid ${c.line2}`, borderRadius: 14, padding: '13px 16px' }}
+      >
+        <span style={{ fontSize: 13.5, fontWeight: 800, color: c.ink2 }}>🧪 Developer · LLM</span>
+        <span style={{ fontSize: 12.5, fontWeight: 700, color: c.blue }}>Test with your key ›</span>
+      </button>
+
+      <button onClick={() => nav('/')} style={{ background: 'none', border: 'none', color: c.ink3, fontSize: 13.5, fontWeight: 700, marginTop: 14, textAlign: 'center' }}>
         Sign out
       </button>
     </PhoneFrame>

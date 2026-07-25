@@ -253,15 +253,28 @@ accuracy track record as local SQLite. See `.env.example` for every variable.
 Point the frontend at no backend and the app degrades gracefully — mock
 LLM/WhatsApp and the synthetic offline report.
 
-## LLM providers & RAG (planned)
+## LLM providers & RAG
 
-The model layer is deliberately small and swappable, and the safety contract —
+The model layer is provider-agnostic. `server/llm/` dispatches one `complete`
+shape to per-vendor adapters — **Claude, GPT (OpenAI), Groq, and Gemini** —
+selected by credentials resolved from either the environment (production) or
+per-request `x-llm-*` headers (BYOK testing). Question authoring, blind answer-key
+verification, and prose rendering all run through it; the safety contract —
 **the engine owns every number; the LLM only writes questions and prose** —
-makes the provider choice a detail, not a risk. The plan to go multi-provider
-(Gemini / Claude / …) and add retrieval (RAG) is written up in
-**[`docs/LLM_AND_RAG.md`](docs/LLM_AND_RAG.md)**: a provider interface behind
-`server/llm/`, syllabus retrieval on Supabase `pgvector`, and the guardrails that
-stay identical no matter which model answers.
+holds identically across providers, which is what makes the choice a detail, not
+a risk.
+
+- **BYOK testing panel** (`/dev/llm`, reachable from *You*): enter your own
+  provider key on your device to run real generation against any of the four
+  providers. The key is stored locally and sent to our backend, which makes the
+  call (no browser CORS, adapters stay server-side). `POST /api/llm/test` does a
+  round-trip connectivity check. For production the key moves to server env and
+  this panel is disabled — same code path. **It's a dev affordance, not a
+  user-facing feature.**
+- **Mock without credentials** — no key anywhere → the deterministic static bank
+  and the engine's own safe card copy, so the whole app still runs.
+- **RAG (planned)** — syllabus retrieval on Supabase `pgvector`, detailed in
+  **[`docs/LLM_AND_RAG.md`](docs/LLM_AND_RAG.md)** along with the provider design.
 
 ## Run it
 

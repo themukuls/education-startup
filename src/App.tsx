@@ -14,6 +14,7 @@ import Tracker from './screens/Tracker'
 import Accuracy from './screens/Accuracy'
 import Upgrade from './screens/Upgrade'
 import You from './screens/You'
+import DevLlm from './screens/DevLlm'
 
 export default function App() {
   return (
@@ -33,6 +34,7 @@ export default function App() {
         <Route path="/accuracy" element={<Accuracy />} />
         <Route path="/upgrade" element={<Upgrade />} />
         <Route path="/you" element={<You />} />
+        <Route path="/dev/llm" element={<DevLlm />} />
         <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )

@@ -4,6 +4,7 @@
 
 import { auditQuestions } from '../data/testQuestions'
 import type { Question } from '../shared/quiz'
+import { llmHeaders } from './llm'
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? ''
 
@@ -23,9 +24,9 @@ export interface TestResult {
 export async function fetchGeneratedTest(p: TestParams): Promise<TestResult> {
   const res = await fetch(`${API_BASE}/api/generate-test`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', ...llmHeaders() },
     body: JSON.stringify({ ...p, count: p.count ?? 9 }),
-    signal: AbortSignal.timeout(30_000),
+    signal: AbortSignal.timeout(45_000),
   })
   if (!res.ok) throw new Error(`generate failed: ${res.status}`)
   const data = await res.json()

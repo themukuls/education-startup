@@ -7,6 +7,7 @@ import { randomUUID } from 'node:crypto'
 import { generateTest, hasKey } from './generate.ts'
 import { renderCard } from './render.ts'
 import { sendCard, hasWhatsApp } from './whatsapp.ts'
+import { pickCreds, credsFromHeaders, credsFromEnv, llmText } from './llm/index.ts'
 import { getStore, storeKind } from './db/index.ts'
 import { computeReport } from '../src/engine/index.ts'
 import { predictBand, resolvePredictions, accuracyStats, calibrationFrom } from '../src/engine/accuracy.ts'
@@ -27,7 +28,7 @@ const PORT = Number(process.env.PORT ?? 8787)
 app.get('/api/health', (_req, res) => {
   res.json({
     ok: true,
-    llm: hasKey() ? 'llm' : 'mock',
+    llm: hasKey() ? 'env' : 'mock',
     whatsapp: hasWhatsApp() ? 'live' : 'mock',
     db: storeKind,
     model: 'claude-opus-4-8',
@@ -46,15 +47,15 @@ app.post('/api/generate-test', async (req, res) => {
   }
 
   try {
-    const { items, source } = await generateTest(request)
+    const { items, source, provider } = await generateTest(request, pickCreds(req))
     if (!items.length) {
       return res.status(502).json({ error: 'no valid questions produced', source })
     }
     const questions = toQuestions(items, request.subject, request.chapter)
-    res.json({ questions, source, meta: { requested: request.count, delivered: questions.length } })
+    res.json({ questions, source, provider, meta: { requested: request.count, delivered: questions.length } })
   } catch (err) {
     console.error('[generate-test] failed:', err)
-    res.status(500).json({ error: 'generation failed' })
+    res.status(500).json({ error: 'generation failed', detail: String((err as Error).message ?? err) })
   }
 })
 
@@ -72,11 +73,40 @@ app.post('/api/render-card', async (req, res) => {
   if (!request.finding) return res.status(400).json({ error: 'missing finding' })
 
   try {
-    const { card, source } = await renderCard(request)
+    const { card, source } = await renderCard(request, pickCreds(req))
     res.json({ card, source })
   } catch (err) {
     console.error('[render-card] failed:', err)
     res.status(500).json({ error: 'render failed' })
+  }
+})
+
+// ---- LLM: report configured provider + test a key (BYOK) --------------------
+app.get('/api/llm/status', (req, res) => {
+  const env = credsFromEnv()
+  const header = credsFromHeaders(req)
+  res.json({
+    envProvider: env?.provider ?? null,
+    envModel: env?.model ?? null,
+    requestProvider: header?.provider ?? null,
+    mode: header ? 'byok' : env ? 'env' : 'mock',
+  })
+})
+
+// Test a provider/key round-trip. Uses BYOK headers if present, else env.
+app.post('/api/llm/test', async (req, res) => {
+  const creds = pickCreds(req)
+  if (!creds) return res.json({ ok: false, mode: 'mock', message: 'No provider configured — app runs in mock mode.' })
+  try {
+    const reply = await llmText(creds, {
+      system: 'You are a connectivity check. Reply with exactly one word.',
+      user: 'Reply with the single word: pong',
+      maxTokens: 16,
+      timeoutMs: 20_000,
+    })
+    res.json({ ok: true, provider: creds.provider, model: creds.model, sample: reply.trim().slice(0, 40) })
+  } catch (err) {
+    res.json({ ok: false, provider: creds.provider, model: creds.model, error: String((err as Error).message ?? err).slice(0, 300) })
   }
 })
 
