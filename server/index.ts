@@ -4,7 +4,7 @@
 import express from 'express'
 import cors from 'cors'
 import { randomUUID } from 'node:crypto'
-import { generateTest, hasKey } from './generate.ts'
+import { generateTest } from './generate.ts'
 import { renderCard } from './render.ts'
 import { sendCard, hasWhatsApp } from './whatsapp.ts'
 import { pickCreds, credsFromHeaders, credsFromEnv, llmText } from './llm/index.ts'
@@ -26,12 +26,13 @@ app.use(express.json({ limit: '256kb' }))
 const PORT = Number(process.env.PORT ?? 8787)
 
 app.get('/api/health', (_req, res) => {
+  const env = credsFromEnv()
   res.json({
     ok: true,
-    llm: hasKey() ? 'env' : 'mock',
+    llm: env ? 'env' : 'mock',
+    provider: env?.provider ?? null,
     whatsapp: hasWhatsApp() ? 'live' : 'mock',
     db: storeKind,
-    model: 'claude-opus-4-8',
   })
 })
 
@@ -306,7 +307,8 @@ app.post('/api/send-card', async (req, res) => {
 })
 
 app.listen(PORT, () => {
+  const env = credsFromEnv()
   console.log(
-    `ParentProof API on :${PORT} — llm=${hasKey() ? 'claude-opus-4-8' : 'mock'} · whatsapp=${hasWhatsApp() ? 'live' : 'mock'}`,
+    `ParentProof API on :${PORT} — llm=${env ? env.provider : 'mock'} · whatsapp=${hasWhatsApp() ? 'live' : 'mock'} · db=${storeKind}`,
   )
 })

@@ -46,18 +46,36 @@ DATABASE_URL=postgres://postgres.<ref>:<password>@aws-0-ap-south-1.pooler.supaba
 On first boot the backend creates its schema and seeds Mukul's demo history
 automatically — nothing to run by hand.
 
-## 2. Backend — Express as an always-on service (Render / Railway / Fly)
+## 2. Backend — Express as an always-on service (Option A)
 
-Deploy `server/index.ts` (`npm run server:start`). Set:
+The API is a long-running process (it can't live on Vercel-static). Host it on
+Render/Railway/Fly; the repo ships a **Render blueprint** (`render.yaml`) so it's
+a few clicks. `tsx` is a runtime dependency and the server binds `process.env.PORT`
+on all interfaces, so no build step or config is needed beyond the env vars.
 
-| Variable | Value |
-| --- | --- |
-| `DATABASE_URL` | the Supabase session-pooler URL above |
-| `ANTHROPIC_API_KEY` | real key → live question/prose (unset = mock) |
-| `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_ID` | live WhatsApp send (unset = mock) |
-| `CORS_ORIGIN` | `https://<your-vercel-app>` (locks the API to your frontend) |
+**Render (recommended):**
+1. **New → Blueprint**, connect this repo. Render reads `render.yaml` and creates
+   the `parentproof-api` web service (build `npm install`, start
+   `npm run server:start`, health check `/api/health`).
+2. In the service's **Environment**, set the secrets (all marked `sync:false`,
+   so they're never in git):
 
-Verify: `GET /api/health` should report `"db":"postgres"`.
+   | Variable | Value |
+   | --- | --- |
+   | `DATABASE_URL` | Supabase **session pooler**, port **5432** (from step 1) |
+   | `CORS_ORIGIN` | `https://<your-vercel-app>` — locks the API to your frontend |
+   | `ANTHROPIC_API_KEY` / `GEMINI_API_KEY` / `OPENAI_API_KEY` / `GROQ_API_KEY` | optional; unset = mock |
+   | `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_ID` | optional; unset = mock |
+
+3. Deploy. On first boot it creates the schema in Supabase and seeds the demo.
+
+**Railway** is equivalent: new project from repo, start command
+`npm run server:start`, same env vars. (Fly too — add a `fly.toml`.)
+
+Verify: `GET https://<your-service>/api/health` → `{"db":"postgres", ...}`, and
+Supabase's Table Editor shows the seeded rows. Note: Render's **free** plan
+sleeps on idle (first request after idle is slow) — fine for testing, upgrade
+for production.
 
 ## 3. First-party API domain via Cloudflare
 
