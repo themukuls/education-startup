@@ -145,8 +145,33 @@ show misses, not just hits.
   board band, the per-exam record (honest about the one miss), and an
   enter-marks form. Reached from the Term Audit's predicted-boards tile.
 
-`npm test` covers the engine (10), accuracy (10), question guardrail (8),
-language guardrail (7), WhatsApp formatting (5), and the store (3) — 43 tests.
+`npm test` covers the engine, accuracy, question + language guardrails, WhatsApp
+formatting, the store (incl. auth tokens + ownership), and LLM credential
+resolution — 51 tests.
+
+## Auth & multi-user
+
+Every browser gets its **own** account — there is no shared/global user any more.
+
+- **Session tokens.** On first load the client mints an anonymous session
+  (`POST /api/auth/session` → a random bearer token in the `auth_tokens` table)
+  and stores it (`pp.token`). Every user-data request carries it
+  (`Authorization: Bearer …`, via `authHeaders()`).
+- **Ownership is enforced.** `requireAuth` resolves the token to a parent id;
+  each child-scoped endpoint (`report`, `sessions`, `accuracy`, `predictions`,
+  `exams`, `child`) checks the child is owned by that parent — a different token
+  gets **404**, never another family's data. `GET /api/me` returns the parent +
+  the children they own; `AppContext` adopts the first child's id (no more
+  hardcoded `mukul`).
+- **Guest → claimed on the real account.** `POST /api/account` upgrades *this*
+  authenticated (anonymous) parent to claimed with name + phone; the WhatsApp
+  inbound webhook find-or-creates a parent by verified phone.
+- **Per-account demo seed.** A freshly minted account is seeded with its own
+  isolated demo child so the app stays full while onboarding is built — replaced
+  by parent-created children (`POST /api/children`) later.
+
+Verified end-to-end: two sessions get distinct tokens and isolated children;
+each reads only its own report; cross-account reads 404.
 
 ## Guest-first — experience before login
 
@@ -213,9 +238,11 @@ chrome on the real screens.
 - **Finish the responsive migration** — move the remaining screens (Tracker,
   Accuracy, You, the funnel) onto `AppShell` / responsive layouts so every route
   is first-class on both form factors.
-- **Accounts + auth** — full multi-parent/child on top of the store and the
-  guest→claimed foundation (schema has `parents`/`children`); wire the DPDP
-  consent/export/delete actions.
+- **Onboarding + cross-device login** — replace the auto-seeded demo child with
+  a real add-child flow (`POST /api/children` + empty states), and add
+  phone-verified login (WhatsApp/OTP) so a claimed account resumes on a new
+  device. Token auth + ownership are already in place; wire the DPDP
+  consent/export/delete actions on top.
 - **Payments** (Razorpay/UPI) to make the paywall real.
 - **Aggregate accuracy** — publish the cross-cohort "within ±8% for X% of
   children" stat (per-child track record is live).

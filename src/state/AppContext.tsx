@@ -3,6 +3,7 @@ import { computeReport, type LearningReport } from '../engine'
 import { buildStream } from '../engine/synthetic'
 import { fetchReport, postSession, type RawAnswer } from '../api/persistence'
 import { saveAccount } from '../api/account'
+import { ensureSession, fetchMe } from '../api/auth'
 
 export type Goal = 'board' | 'weak-subject' | 'habit'
 export type AccountStatus = 'guest' | 'claimed'
@@ -29,8 +30,6 @@ const ls = {
 
 // Fixed "now" so the offline fallback report is deterministic (no Date.now()).
 const DEMO_ASOF = 1_760_000_000_000
-/** The demo child's id in the store. */
-const CHILD_ID = 'mukul'
 
 export interface Child {
   name: string
@@ -64,6 +63,8 @@ interface AppContextValue extends AppState {
   recordSession: (answers: RawAnswer[]) => Promise<void>
   /** Computed learning report — from the child's stored history (or synthetic fallback). */
   report: LearningReport
+  /** The active child's id in the store (from /api/me), or null until it loads. */
+  childId: string | null
 
   // ---- guest-first / deferred save ----
   accountStatus: AccountStatus
@@ -111,23 +112,45 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [streak] = useState(5)
   const [lastScore, setLastScore] = useState<number | null>(null)
   const [answered, setAnswered] = useState(0)
+  const [childId, setChildId] = useState<string | null>(null)
 
   // Report state. Initialised synchronously with the synthetic stream so the UI
   // renders instantly and still works offline, then replaced by the child's
   // real, stored report from the backend when it arrives.
   const [report, setReport] = useState<LearningReport>(() =>
-    computeReport(buildStream({ archetype: 'improver', childId: CHILD_ID, asOf: DEMO_ASOF, seed: 7 })),
+    computeReport(buildStream({ archetype: 'improver', childId: 'demo', asOf: DEMO_ASOF, seed: 7 })),
   )
 
+  // On mount: ensure a session (mint an anonymous token if none), then adopt
+  // THIS account's parent + first child from /api/me. Removes the hardcoded
+  // child id — each browser now sees its own isolated data. Falls back to the
+  // synthetic report + guest defaults when the backend is unavailable.
   useEffect(() => {
     let alive = true
-    fetchReport(CHILD_ID)
-      .then((r) => {
-        if (alive) setReport(r)
-      })
-      .catch(() => {
-        /* backend unavailable — keep the synthetic fallback */
-      })
+    ;(async () => {
+      try {
+        await ensureSession()
+        const me = await fetchMe()
+        if (!alive) return
+        if (me.parent) {
+          setParentName(me.parent.name || 'Guest')
+          setParentPhone(me.parent.phone || '')
+          setParentChannel(me.parent.channel === 'whatsapp' ? 'whatsapp' : me.parent.channel === 'manual' ? 'manual' : '')
+          setAccountStatus(me.parent.claimed ? 'claimed' : 'guest')
+          ls.set('pp.status', me.parent.claimed ? 'claimed' : 'guest')
+          if (me.parent.name) ls.set('pp.name', me.parent.name)
+        }
+        const first = me.children[0]
+        if (first) {
+          setChildId(first.id)
+          setChildState({ name: first.name, board: first.board, klass: first.klass, subjects: first.subjects, monthlySpend: first.monthlySpend })
+          const r = await fetchReport(first.id)
+          if (alive) setReport(r)
+        }
+      } catch {
+        /* backend unavailable — keep the synthetic fallback + guest defaults */
+      }
+    })()
     return () => {
       alive = false
     }
@@ -147,6 +170,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       lastScore,
       answered,
       report,
+      childId,
       setParentName,
       setGoal,
       setChild: (patch) => setChildState((prev) => ({ ...prev, ...patch })),
@@ -155,8 +179,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setAnswered(ans)
       },
       recordSession: async (answers) => {
+        if (!childId) return
         try {
-          const updated = await postSession(CHILD_ID, answers)
+          const updated = await postSession(childId, answers)
           setReport(updated)
         } catch (err) {
           console.warn('[state] session not persisted (backend unavailable):', err)
@@ -203,6 +228,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     lastScore,
     answered,
     report,
+    childId,
   ])
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>

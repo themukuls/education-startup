@@ -5,8 +5,6 @@ import { useApp } from '../state/AppContext'
 import { fetchAccuracy, enterMarks, type AccuracyPayload } from '../api/accuracy'
 import { c, serif } from '../theme'
 
-const CHILD_ID = 'mukul'
-
 const EXAM_LABEL: Record<string, string> = {
   school_ut: 'Unit test',
   midterm: 'Mid-term',
@@ -18,7 +16,7 @@ const EXAM_TYPES = ['school_ut', 'midterm', 'preboard', 'board']
 // Prediction vs. actual — the trust ritual. Every school exam, the parent
 // enters real marks; we check the prediction we ACTUALLY made, misses included.
 export default function Accuracy() {
-  const { child } = useApp()
+  const { child, childId } = useApp()
   const [data, setData] = useState<AccuracyPayload | null>(null)
   const [subject, setSubject] = useState(child.subjects[0] ?? 'Maths')
   const [examType, setExamType] = useState('school_ut')
@@ -26,21 +24,22 @@ export default function Accuracy() {
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
+    if (!childId) return
     let alive = true
-    fetchAccuracy(CHILD_ID)
+    fetchAccuracy(childId)
       .then((d) => alive && setData(d))
       .catch(() => alive && setData(null))
     return () => {
       alive = false
     }
-  }, [])
+  }, [childId])
 
   async function submit() {
     const n = Number(marks)
-    if (!Number.isFinite(n) || n < 0 || n > 100) return
+    if (!Number.isFinite(n) || n < 0 || n > 100 || !childId) return
     setSaving(true)
     try {
-      const updated = await enterMarks(CHILD_ID, subject, examType, n)
+      const updated = await enterMarks(childId, subject, examType, n)
       setData(updated)
       setMarks('')
     } catch {

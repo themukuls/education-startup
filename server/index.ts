@@ -8,7 +8,8 @@ import { generateTest } from './generate.ts'
 import { renderCard } from './render.ts'
 import { sendCard, hasWhatsApp } from './whatsapp.ts'
 import { pickCreds, credsFromHeaders, credsFromEnv, llmText } from './llm/index.ts'
-import { getStore, storeKind } from './db/index.ts'
+import { getStore, storeKind, mintAnonAccount, seedDemoChild } from './db/index.ts'
+import { requireAuth, ownsChild, newToken } from './auth.ts'
 import { computeReport } from '../src/engine/index.ts'
 import { predictBand, resolvePredictions, accuracyStats, calibrationFrom } from '../src/engine/accuracy.ts'
 import type { AnswerEvent } from '../src/engine/types.ts'
@@ -111,18 +112,70 @@ app.post('/api/llm/test', async (req, res) => {
   }
 })
 
+// ---- Auth: anonymous session + who am I -------------------------------------
+
+// Mint a fresh anonymous account (own parent + own seeded demo child) and return
+// a bearer token. The client calls this once and stores the token.
+app.post('/api/auth/session', async (_req, res) => {
+  try {
+    const store = await getStore()
+    const { parentId } = await mintAnonAccount(store)
+    const token = newToken()
+    await store.createToken(token, parentId)
+    res.json({ token })
+  } catch (err) {
+    console.error('[auth/session] failed:', err)
+    res.status(500).json({ error: 'could not create session' })
+  }
+})
+
+// The authenticated parent + the children they own.
+app.get('/api/me', requireAuth, async (_req, res) => {
+  const store = await getStore()
+  const parent = await store.getParent(res.locals.parentId)
+  const children = await store.getChildrenForParent(res.locals.parentId)
+  res.json({
+    parent: parent && { id: parent.id, name: parent.name, phone: parent.phone, channel: parent.channel, claimed: !!parent.claimed },
+    children,
+  })
+})
+
+// Add a child to the authenticated parent.
+app.post('/api/children', requireAuth, async (req, res) => {
+  const b = req.body ?? {}
+  const name = String(b.name ?? '').trim()
+  if (!name) return res.status(400).json({ error: 'name required' })
+  const store = await getStore()
+  const child = {
+    id: `c_${randomUUID()}`,
+    parentId: res.locals.parentId,
+    name,
+    board: String(b.board ?? 'CBSE'),
+    klass: Number(b.klass ?? 10),
+    subjects: Array.isArray(b.subjects) ? b.subjects.map(String) : ['Maths'],
+    monthlySpend: Number(b.monthlySpend ?? 0),
+  }
+  try {
+    await store.upsertChild(child)
+    if (b.seedDemo) await seedDemoChild(store, res.locals.parentId, child.id, child.name)
+    res.json({ ok: true, child })
+  } catch (err) {
+    console.error('[children] failed:', err)
+    res.status(500).json({ error: 'could not add child' })
+  }
+})
+
 // ---- Persistence: a child's real learning record ----
 
-app.get('/api/child/:childId', async (req, res) => {
-  const child = await (await getStore()).getChild(req.params.childId)
-  if (!child) return res.status(404).json({ error: 'child not found' })
-  res.json(child)
+app.get('/api/child/:childId', requireAuth, async (req, res) => {
+  if (!(await ownsChild(res, req.params.childId))) return res.status(404).json({ error: 'child not found' })
+  res.json(await (await getStore()).getChild(req.params.childId))
 })
 
 // Compute the report from the child's STORED event history (not synthetic data).
-app.get('/api/report/:childId', async (req, res) => {
+app.get('/api/report/:childId', requireAuth, async (req, res) => {
+  if (!(await ownsChild(res, req.params.childId))) return res.status(404).json({ error: 'child not found' })
   const store = await getStore()
-  if (!(await store.getChild(req.params.childId))) return res.status(404).json({ error: 'child not found' })
   try {
     const input = await store.getEngineInput(req.params.childId, Date.now())
     res.json(computeReport(input))
@@ -134,14 +187,14 @@ app.get('/api/report/:childId', async (req, res) => {
 
 // Record a completed test: persist the session + its answers, then return the
 // recomputed report so the child's profile updates immediately.
-app.post('/api/sessions', async (req, res) => {
+app.post('/api/sessions', requireAuth, async (req, res) => {
   const b = req.body ?? {}
   const childId = String(b.childId ?? '')
   const raw = Array.isArray(b.answers) ? b.answers : []
   if (!childId || raw.length === 0) return res.status(400).json({ error: 'childId and answers required' })
 
+  if (!(await ownsChild(res, childId))) return res.status(404).json({ error: 'child not found' })
   const store = await getStore()
-  if (!(await store.getChild(childId))) return res.status(404).json({ error: 'child not found' })
 
   const now = Date.now()
   const sessionId = randomUUID()
@@ -174,16 +227,16 @@ app.post('/api/sessions', async (req, res) => {
 
 // ---- Account: claim a guest record (lightweight; full auth comes later) ----
 
-app.post('/api/account', async (req, res) => {
+app.post('/api/account', requireAuth, async (req, res) => {
   const b = req.body ?? {}
   const name = String(b.name ?? 'Parent').trim() || 'Parent'
   const phone = String(b.phone ?? '').trim()
   const channel = b.channel === 'whatsapp' ? 'whatsapp' : 'manual'
   try {
-    // demo has a single parent; a real build keys this by the authed account.
-    // A WhatsApp claim may arrive with no phone yet — the inbound webhook fills
-    // in the verified number when the parent's message lands (no OTP).
-    await (await getStore()).upsertParent({ id: 'priya', name, phone, channel })
+    // upgrade THIS authenticated parent from anonymous to claimed. A WhatsApp
+    // claim may arrive with no phone yet — the inbound webhook fills in the
+    // verified number when the parent's message lands (no OTP).
+    await (await getStore()).upsertParent({ id: res.locals.parentId, name, phone, channel, claimed: true })
     res.json({ ok: true, channel })
   } catch (err) {
     console.error('[account] failed:', err)
@@ -206,9 +259,18 @@ app.post('/api/whatsapp/inbound', async (req, res) => {
   const code = (text.match(/\[(PP-[A-Z0-9]+)\]/) ?? [])[1] ?? null
   if (!from) return res.status(400).json({ error: 'missing verified sender' })
   try {
-    // real build: look up the guest session by `code`; demo keys the one parent
-    await (await getStore()).upsertParent({ id: 'priya', name: profileName, phone: from, channel: 'whatsapp' })
-    res.json({ ok: true, verified: from, code })
+    // WhatsApp identifies the parent by their verified number. Real build ties
+    // `code` back to the exact guest session; here we find-or-create by phone.
+    const store = await getStore()
+    const existing = await store.getParentByPhone(from)
+    if (existing) {
+      await store.upsertParent({ id: existing.id, name: profileName, phone: from, channel: 'whatsapp', claimed: true })
+      res.json({ ok: true, verified: from, code, parentId: existing.id })
+    } else {
+      const parentId = `p_${randomUUID()}`
+      await store.createParent({ id: parentId, name: profileName, phone: from, channel: 'whatsapp', claimed: true })
+      res.json({ ok: true, verified: from, code, parentId, created: true })
+    }
   } catch (err) {
     console.error('[whatsapp inbound] failed:', err)
     res.status(500).json({ error: 'inbound handling failed' })
@@ -233,18 +295,17 @@ async function accuracyPayload(childId: string) {
   }
 }
 
-app.get('/api/accuracy/:childId', async (req, res) => {
-  const store = await getStore()
-  if (!(await store.getChild(req.params.childId))) return res.status(404).json({ error: 'child not found' })
+app.get('/api/accuracy/:childId', requireAuth, async (req, res) => {
+  if (!(await ownsChild(res, req.params.childId))) return res.status(404).json({ error: 'child not found' })
   res.json(await accuracyPayload(req.params.childId))
 })
 
 // Snapshot a prediction now, so we can honestly check it against real marks later.
-app.post('/api/predictions', async (req, res) => {
+app.post('/api/predictions', requireAuth, async (req, res) => {
   const b = req.body ?? {}
   const childId = String(b.childId ?? '')
+  if (!(await ownsChild(res, childId))) return res.status(404).json({ error: 'child not found' })
   const store = await getStore()
-  if (!(await store.getChild(childId))) return res.status(404).json({ error: 'child not found' })
   const now = Date.now()
   const readiness = computeReport(await store.getEngineInput(childId, now)).readinessPct
   const cal = calibrationFrom(resolvePredictions(await store.getPredictions(childId), await store.getExamResults(childId)))
@@ -264,12 +325,12 @@ app.post('/api/predictions', async (req, res) => {
 })
 
 // Parent enters the child's real exam marks — resolves the matching prediction.
-app.post('/api/exams', async (req, res) => {
+app.post('/api/exams', requireAuth, async (req, res) => {
   const b = req.body ?? {}
   const childId = String(b.childId ?? '')
   const marks = Number(b.marks)
+  if (!(await ownsChild(res, childId))) return res.status(404).json({ error: 'child not found' })
   const store = await getStore()
-  if (!(await store.getChild(childId))) return res.status(404).json({ error: 'child not found' })
   if (!Number.isFinite(marks) || marks < 0 || marks > 100) return res.status(400).json({ error: 'marks must be 0-100' })
   await store.addExamResult({
     childId,

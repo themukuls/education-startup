@@ -2,12 +2,14 @@
 // linked) when they choose to save their guest progress. Full auth (WhatsApp
 // inbound verification, sessions) comes later.
 
+import { authHeaders } from './auth'
+
 const API_BASE = import.meta.env.VITE_API_BASE ?? ''
 
 export async function saveAccount(name: string, phone: string, channel = 'manual'): Promise<void> {
   const res = await fetch(`${API_BASE}/api/account`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', ...authHeaders() },
     body: JSON.stringify({ name, phone, channel }),
     signal: AbortSignal.timeout(15_000),
   })

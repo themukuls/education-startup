@@ -15,8 +15,12 @@ const { Pool } = pkg
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS parents (
-  id TEXT PRIMARY KEY, name TEXT NOT NULL, phone TEXT, link_channel TEXT, created_at DOUBLE PRECISION
+  id TEXT PRIMARY KEY, name TEXT NOT NULL, phone TEXT, link_channel TEXT, claimed INTEGER, created_at DOUBLE PRECISION
 );
+CREATE TABLE IF NOT EXISTS auth_tokens (
+  token TEXT PRIMARY KEY, parent_id TEXT NOT NULL, created_at DOUBLE PRECISION, last_seen DOUBLE PRECISION
+);
+CREATE INDEX IF NOT EXISTS idx_tokens_parent ON auth_tokens(parent_id);
 CREATE TABLE IF NOT EXISTS children (
   id TEXT PRIMARY KEY, parent_id TEXT, name TEXT NOT NULL, board TEXT, klass INTEGER,
   subjects TEXT, monthly_spend INTEGER, created_at DOUBLE PRECISION
@@ -62,6 +66,7 @@ export class PostgresStore implements Store {
     // idempotent migrations for pre-existing databases
     await this.pool.query('ALTER TABLE exams ADD COLUMN IF NOT EXISTS subject TEXT')
     await this.pool.query('ALTER TABLE parents ADD COLUMN IF NOT EXISTS link_channel TEXT')
+    await this.pool.query('ALTER TABLE parents ADD COLUMN IF NOT EXISTS claimed INTEGER')
   }
 
   async isEmpty(): Promise<boolean> {
@@ -71,14 +76,73 @@ export class PostgresStore implements Store {
 
   async upsertParent(p: ParentRecord): Promise<void> {
     await this.pool.query(
-      `INSERT INTO parents (id, name, phone, link_channel, created_at)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO parents (id, name, phone, link_channel, claimed, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6)
        ON CONFLICT (id) DO UPDATE SET
          name = EXCLUDED.name,
          phone = CASE WHEN EXCLUDED.phone <> '' THEN EXCLUDED.phone ELSE parents.phone END,
-         link_channel = EXCLUDED.link_channel`,
-      [p.id, p.name, p.phone, p.channel ?? 'manual', Date.now()],
+         link_channel = EXCLUDED.link_channel,
+         claimed = CASE WHEN EXCLUDED.claimed = 1 THEN 1 ELSE parents.claimed END`,
+      [p.id, p.name, p.phone, p.channel ?? 'manual', p.claimed ? 1 : 0, Date.now()],
     )
+  }
+
+  async createParent(p: ParentRecord): Promise<void> {
+    await this.pool.query(
+      `INSERT INTO parents (id, name, phone, link_channel, claimed, created_at) VALUES ($1, $2, $3, $4, $5, $6)`,
+      [p.id, p.name, p.phone, p.channel ?? 'manual', p.claimed ? 1 : 0, Date.now()],
+    )
+  }
+
+  private rowToParent(r: Record<string, unknown> | undefined): ParentRecord | null {
+    if (!r) return null
+    return {
+      id: r.id as string,
+      name: (r.name as string) ?? '',
+      phone: (r.phone as string) ?? '',
+      channel: (r.link_channel as string) ?? 'manual',
+      claimed: !!r.claimed,
+    }
+  }
+
+  async getParent(id: string): Promise<ParentRecord | null> {
+    const { rows } = await this.pool.query('SELECT * FROM parents WHERE id = $1', [id])
+    return this.rowToParent(rows[0])
+  }
+
+  async getParentByPhone(phone: string): Promise<ParentRecord | null> {
+    if (!phone) return null
+    const { rows } = await this.pool.query("SELECT * FROM parents WHERE phone = $1 AND phone <> '' ORDER BY created_at LIMIT 1", [phone])
+    return this.rowToParent(rows[0])
+  }
+
+  async getChildrenForParent(parentId: string): Promise<ChildRecord[]> {
+    const { rows } = await this.pool.query('SELECT * FROM children WHERE parent_id = $1 ORDER BY created_at', [parentId])
+    return rows.map((r) => ({
+      id: r.id,
+      parentId: r.parent_id ?? '',
+      name: r.name,
+      board: r.board ?? 'CBSE',
+      klass: r.klass ?? 10,
+      subjects: JSON.parse(r.subjects || '[]'),
+      monthlySpend: r.monthly_spend ?? 0,
+    }))
+  }
+
+  async createToken(token: string, parentId: string): Promise<void> {
+    const now = Date.now()
+    await this.pool.query('INSERT INTO auth_tokens (token, parent_id, created_at, last_seen) VALUES ($1, $2, $3, $4)', [token, parentId, now, now])
+  }
+
+  async parentIdForToken(token: string): Promise<string | null> {
+    const { rows } = await this.pool.query('SELECT parent_id FROM auth_tokens WHERE token = $1', [token])
+    if (!rows[0]) return null
+    await this.pool.query('UPDATE auth_tokens SET last_seen = $1 WHERE token = $2', [Date.now(), token])
+    return rows[0].parent_id
+  }
+
+  async deleteToken(token: string): Promise<void> {
+    await this.pool.query('DELETE FROM auth_tokens WHERE token = $1', [token])
   }
 
   async upsertChild(c: ChildRecord): Promise<void> {

@@ -23,6 +23,8 @@ export interface ParentRecord {
   phone: string
   /** how they linked: 'whatsapp' (verified by their phone, no OTP) or 'manual'. */
   channel?: string
+  /** false while an anonymous guest; true once they save name + phone. */
+  claimed?: boolean
 }
 
 // The interface is async so the same seam backs SQLite (sync driver, wrapped)
@@ -32,6 +34,17 @@ export interface Store {
   init(): Promise<void>
   isEmpty(): Promise<boolean>
   upsertParent(p: ParentRecord): Promise<void>
+  /** insert a brand-new parent row (used to mint an anonymous account). */
+  createParent(p: ParentRecord): Promise<void>
+  getParent(id: string): Promise<ParentRecord | null>
+  getParentByPhone(phone: string): Promise<ParentRecord | null>
+  /** all children owned by a parent — the basis for per-user data isolation. */
+  getChildrenForParent(parentId: string): Promise<ChildRecord[]>
+  // ---- auth tokens (opaque bearer session) ----
+  createToken(token: string, parentId: string): Promise<void>
+  /** resolve a bearer token to its parent id (and bump last-seen), or null. */
+  parentIdForToken(token: string): Promise<string | null>
+  deleteToken(token: string): Promise<void>
   upsertChild(c: ChildRecord): Promise<void>
   getChild(id: string): Promise<ChildRecord | null>
   addSession(s: SessionEvent): Promise<void>
@@ -50,8 +63,12 @@ export type StoreKind = 'sqlite' | 'postgres'
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS parents (
-  id TEXT PRIMARY KEY, name TEXT NOT NULL, phone TEXT, created_at INTEGER
+  id TEXT PRIMARY KEY, name TEXT NOT NULL, phone TEXT, link_channel TEXT, claimed INTEGER, created_at INTEGER
 );
+CREATE TABLE IF NOT EXISTS auth_tokens (
+  token TEXT PRIMARY KEY, parent_id TEXT NOT NULL, created_at INTEGER, last_seen INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_tokens_parent ON auth_tokens(parent_id);
 CREATE TABLE IF NOT EXISTS children (
   id TEXT PRIMARY KEY, parent_id TEXT, name TEXT NOT NULL, board TEXT, klass INTEGER,
   subjects TEXT, monthly_spend INTEGER, created_at INTEGER
@@ -100,6 +117,12 @@ export class SqliteStore implements Store {
     } catch {
       /* column already present */
     }
+    // migration for DBs created before the guest/claimed distinction
+    try {
+      this.db.exec('ALTER TABLE parents ADD COLUMN claimed INTEGER')
+    } catch {
+      /* column already present */
+    }
   }
 
   async isEmpty(): Promise<boolean> {
@@ -110,13 +133,76 @@ export class SqliteStore implements Store {
   async upsertParent(p: ParentRecord): Promise<void> {
     this.db
       .prepare(
-        `INSERT INTO parents (id, name, phone, link_channel, created_at)
-         VALUES (@id, @name, @phone, @channel, @createdAt)
+        `INSERT INTO parents (id, name, phone, link_channel, claimed, created_at)
+         VALUES (@id, @name, @phone, @channel, @claimed, @createdAt)
          ON CONFLICT(id) DO UPDATE SET name=@name,
            phone=CASE WHEN @phone != '' THEN @phone ELSE parents.phone END,
-           link_channel=@channel`,
+           link_channel=@channel,
+           claimed=CASE WHEN @claimed=1 THEN 1 ELSE parents.claimed END`,
       )
-      .run({ ...p, channel: p.channel ?? 'manual', createdAt: Date.now() })
+      .run({ ...p, channel: p.channel ?? 'manual', claimed: p.claimed ? 1 : 0, createdAt: Date.now() })
+  }
+
+  async createParent(p: ParentRecord): Promise<void> {
+    this.db
+      .prepare(
+        `INSERT INTO parents (id, name, phone, link_channel, claimed, created_at)
+         VALUES (@id, @name, @phone, @channel, @claimed, @createdAt)`,
+      )
+      .run({ ...p, channel: p.channel ?? 'manual', claimed: p.claimed ? 1 : 0, createdAt: Date.now() })
+  }
+
+  private rowToParent(r: Record<string, unknown> | undefined): ParentRecord | null {
+    if (!r) return null
+    return {
+      id: r.id as string,
+      name: (r.name as string) ?? '',
+      phone: (r.phone as string) ?? '',
+      channel: (r.link_channel as string) ?? 'manual',
+      claimed: !!r.claimed,
+    }
+  }
+
+  async getParent(id: string): Promise<ParentRecord | null> {
+    return this.rowToParent(this.db.prepare('SELECT * FROM parents WHERE id = ?').get(id) as Record<string, unknown> | undefined)
+  }
+
+  async getParentByPhone(phone: string): Promise<ParentRecord | null> {
+    if (!phone) return null
+    return this.rowToParent(
+      this.db.prepare('SELECT * FROM parents WHERE phone = ? AND phone != \'\' ORDER BY created_at LIMIT 1').get(phone) as
+        | Record<string, unknown>
+        | undefined,
+    )
+  }
+
+  async getChildrenForParent(parentId: string): Promise<ChildRecord[]> {
+    const rows = this.db.prepare('SELECT * FROM children WHERE parent_id = ? ORDER BY created_at').all(parentId) as Record<string, unknown>[]
+    return rows.map((r) => ({
+      id: r.id as string,
+      parentId: (r.parent_id as string) ?? '',
+      name: r.name as string,
+      board: (r.board as string) ?? 'CBSE',
+      klass: (r.klass as number) ?? 10,
+      subjects: JSON.parse((r.subjects as string) || '[]'),
+      monthlySpend: (r.monthly_spend as number) ?? 0,
+    }))
+  }
+
+  async createToken(token: string, parentId: string): Promise<void> {
+    const now = Date.now()
+    this.db.prepare('INSERT INTO auth_tokens (token, parent_id, created_at, last_seen) VALUES (?, ?, ?, ?)').run(token, parentId, now, now)
+  }
+
+  async parentIdForToken(token: string): Promise<string | null> {
+    const row = this.db.prepare('SELECT parent_id FROM auth_tokens WHERE token = ?').get(token) as { parent_id: string } | undefined
+    if (!row) return null
+    this.db.prepare('UPDATE auth_tokens SET last_seen = ? WHERE token = ?').run(Date.now(), token)
+    return row.parent_id
+  }
+
+  async deleteToken(token: string): Promise<void> {
+    this.db.prepare('DELETE FROM auth_tokens WHERE token = ?').run(token)
   }
 
   async upsertChild(c: ChildRecord): Promise<void> {

@@ -47,4 +47,34 @@ describe('SqliteStore', () => {
     expect((await s.getEngineInput('b', 5)).answers).toHaveLength(0)
     await s.close()
   })
+
+  it('mints tokens + scopes children to their owning parent', async () => {
+    const s = await mk()
+    await s.createParent({ id: 'p1', name: '', phone: '', claimed: false })
+    await s.createToken('tok-1', 'p1')
+    expect(await s.parentIdForToken('tok-1')).toBe('p1')
+    expect(await s.parentIdForToken('nope')).toBeNull()
+
+    await s.upsertChild({ id: 'k1', parentId: 'p1', name: 'A', board: 'CBSE', klass: 10, subjects: [], monthlySpend: 0 })
+    await s.upsertChild({ id: 'k2', parentId: 'p2', name: 'B', board: 'CBSE', klass: 10, subjects: [], monthlySpend: 0 })
+    const mine = await s.getChildrenForParent('p1')
+    expect(mine.map((c) => c.id)).toEqual(['k1'])
+    // the other parent's child is reachable by id but carries their ownership
+    expect((await s.getChild('k2'))?.parentId).toBe('p2')
+
+    await s.deleteToken('tok-1')
+    expect(await s.parentIdForToken('tok-1')).toBeNull()
+    await s.close()
+  })
+
+  it('claims an anonymous parent (guest → claimed) and finds by phone', async () => {
+    const s = await mk()
+    await s.createParent({ id: 'p1', name: '', phone: '', claimed: false })
+    expect((await s.getParent('p1'))?.claimed).toBe(false)
+    await s.upsertParent({ id: 'p1', name: 'Priya', phone: '919876543210', channel: 'whatsapp', claimed: true })
+    const p = await s.getParent('p1')
+    expect(p).toMatchObject({ name: 'Priya', phone: '919876543210', claimed: true })
+    expect((await s.getParentByPhone('919876543210'))?.id).toBe('p1')
+    await s.close()
+  })
 })

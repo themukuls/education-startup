@@ -3,6 +3,7 @@
 
 import type { LearningReport } from '../engine'
 import type { CogLevel, QuestionFormat } from '../shared/quiz'
+import { authHeaders } from './auth'
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? ''
 
@@ -21,7 +22,7 @@ export interface RawAnswer {
 }
 
 export async function fetchReport(childId: string): Promise<LearningReport> {
-  const res = await fetch(`${API_BASE}/api/report/${childId}`, { signal: AbortSignal.timeout(15_000) })
+  const res = await fetch(`${API_BASE}/api/report/${childId}`, { headers: { ...authHeaders() }, signal: AbortSignal.timeout(15_000) })
   if (!res.ok) throw new Error(`report failed: ${res.status}`)
   return res.json()
 }
@@ -30,7 +31,7 @@ export async function fetchReport(childId: string): Promise<LearningReport> {
 export async function postSession(childId: string, answers: RawAnswer[]): Promise<LearningReport> {
   const res = await fetch(`${API_BASE}/api/sessions`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', ...authHeaders() },
     body: JSON.stringify({ childId, answers }),
     signal: AbortSignal.timeout(20_000),
   })
