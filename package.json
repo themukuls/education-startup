@@ -11,7 +11,8 @@
     "typecheck": "tsc -b --noEmit",
     "test": "vitest run",
     "server": "tsx watch --env-file-if-exists=.env server/index.ts",
-    "server:start": "tsx --env-file-if-exists=.env server/index.ts"
+    "server:start": "tsx --env-file-if-exists=.env server/index.ts",
+    "smoke": "node scripts/smoke.mjs"
   },
   "engines": {
     "node": ">=20.6"

@@ -77,6 +77,18 @@ Supabase's Table Editor shows the seeded rows. Note: Render's **free** plan
 sleeps on idle (first request after idle is slow) — fine for testing, upgrade
 for production.
 
+**Smoke test the deploy.** After the service is up, run the end-to-end API
+check against it:
+
+```bash
+SMOKE_BASE=https://<your-service> npm run smoke
+```
+
+It exercises the critical path — session, ownership isolation (cross-account
+404), onboarding, report, accuracy, RAG, cross-device login, and DPDP
+export/delete — and exits non-zero on any failure, so it doubles as a CI gate.
+(Verified locally against a real Postgres in production mode: 14/14 pass.)
+
 ## 3. First-party API domain via Cloudflare
 
 The backend's own URL (`your-app.onrender.com`) must never reach the client.
