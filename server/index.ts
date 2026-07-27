@@ -6,12 +6,13 @@ import cors from 'cors'
 import { randomUUID, randomInt } from 'node:crypto'
 import { generateTest } from './generate.ts'
 import { renderCard } from './render.ts'
-import { sendCard, hasWhatsApp } from './whatsapp.ts'
+import { sendCard, sendOtp, hasWhatsApp } from './whatsapp.ts'
 import { pickCreds, credsFromHeaders, credsFromEnv, llmText } from './llm/index.ts'
 import { retrieve, ingest, groundingBlock, type RawDoc } from './rag/index.ts'
 import { getStore, storeKind, mintAnonAccount, seedDemoChild } from './db/index.ts'
 import { requireAuth, ownsChild, newToken, hashToken, whatsappSignatureOk } from './auth.ts'
 import { rateLimit } from './ratelimit.ts'
+import { createOrder, verifyPayment, hasRazorpay, isPlan, PLANS } from './payments.ts'
 import { computeReport } from '../src/engine/index.ts'
 import { predictBand, resolvePredictions, accuracyStats, calibrationFrom } from '../src/engine/accuracy.ts'
 import type { AnswerEvent } from '../src/engine/types.ts'
@@ -171,9 +172,12 @@ app.post('/api/auth/login/start', rateLimit({ windowMs: 10 * 60_000, max: 6, nam
     }
     const code = String(randomInt(0, 1_000_000)).padStart(6, '0')
     await store.putLoginCode(phone, code, Date.now() + 10 * 60 * 1000)
-    // Delivery: a business-initiated OTP needs a pre-approved WhatsApp template
-    // (TODO: add an `auth_code` template + send here when WHATSAPP_* is set).
-    // Until then, mock mode returns the code so the flow is fully testable.
+    // Deliver via WhatsApp when configured (needs an approved auth template, set
+    // WHATSAPP_OTP_TEMPLATE); in mock mode return the code so it stays testable.
+    if (hasWhatsApp()) {
+      const r = await sendOtp(phone, code)
+      if (r.status === 'error') console.warn('[login] OTP send failed:', r.error)
+    }
     res.json({ ok: true, ...(hasWhatsApp() ? {} : { devCode: code }) })
   } catch (err) {
     console.error('[login/start] failed:', err)
@@ -220,9 +224,37 @@ app.get('/api/me', requireAuth, async (_req, res) => {
   const parent = await store.getParent(res.locals.parentId)
   const children = await store.getChildrenForParent(res.locals.parentId)
   res.json({
-    parent: parent && { id: parent.id, name: parent.name, phone: parent.phone, channel: parent.channel, claimed: !!parent.claimed },
+    parent: parent && { id: parent.id, name: parent.name, phone: parent.phone, channel: parent.channel, claimed: !!parent.claimed, plan: parent.plan ?? 'free' },
     children,
   })
+})
+
+// ---- Payments (Razorpay) — real with keys, mock otherwise -------------------
+app.post('/api/pay/order', requireAuth, async (req, res) => {
+  const plan = String((req.body ?? {}).plan ?? '')
+  if (!isPlan(plan)) return res.status(400).json({ error: 'plan must be core or annual' })
+  try {
+    const order = await createOrder(plan)
+    res.json({ ...order, plan, label: PLANS[plan].label })
+  } catch (err) {
+    console.error('[pay/order] failed:', err)
+    res.status(502).json({ error: 'could not create order' })
+  }
+})
+
+app.post('/api/pay/verify', requireAuth, async (req, res) => {
+  const b = req.body ?? {}
+  const plan = String(b.plan ?? '')
+  if (!isPlan(plan)) return res.status(400).json({ error: 'invalid plan' })
+  const ok = verifyPayment(String(b.orderId ?? ''), String(b.paymentId ?? ''), String(b.signature ?? ''))
+  if (!ok) return res.status(400).json({ error: 'payment verification failed' })
+  try {
+    await (await getStore()).setPlan(res.locals.parentId, plan)
+    res.json({ ok: true, plan, mock: !hasRazorpay() })
+  } catch (err) {
+    console.error('[pay/verify] failed:', err)
+    res.status(500).json({ error: 'could not activate plan' })
+  }
 })
 
 // Add a child to the authenticated parent.

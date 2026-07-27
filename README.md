@@ -292,12 +292,12 @@ chrome on the real screens.
 - **Finish the responsive migration** — move the remaining screens (Tracker,
   Accuracy, You, the funnel) onto `AppShell` / responsive layouts so every route
   is first-class on both form factors.
-- **WhatsApp OTP delivery** — cross-device login works; wiring an `auth_code`
-  WhatsApp template makes the code actually arrive in production (mock returns it
-  today).
-- **WhatsApp Business template** — for real OTP delivery and business-initiated
-  card sends (both mock today).
-- **Payments** (Razorpay/UPI) to make the paywall real.
+- **Razorpay production keys** — the pay flow is real end-to-end (order → checkout
+  → server-side signature verify → entitlement); set `RAZORPAY_KEY_ID` /
+  `RAZORPAY_KEY_SECRET` to take live payments instead of the deterministic mock.
+- **Approved WhatsApp templates** — the OTP and weekly-card sends are wired to the
+  Meta Cloud API; register the `WHATSAPP_OTP_TEMPLATE` (AUTHENTICATION) and card
+  templates so business-initiated messages deliver outside a 24h window.
 
 ## Details worth noting
 
@@ -314,6 +314,27 @@ chrome on the real screens.
   per-chapter ledger) rather than hardcoded numbers.
 - **CI** (`.github/workflows/ci.yml`) runs build + tests and a smoke job on every
   push/PR.
+- **Payments are real (Razorpay), mock-safe.** `server/payments.ts` creates orders
+  and verifies the checkout signature with an HMAC (`HMAC_SHA256(order_id|payment_id)`)
+  — no SDK. Without `RAZORPAY_KEY_ID`/`RAZORPAY_KEY_SECRET` it returns a
+  deterministic mock order (`order_mock_*`) and accepts the verify, so the whole
+  `POST /api/pay/order → checkout → POST /api/pay/verify → setPlan` flow is testable
+  without keys. The client (`src/api/payment.ts`) loads Razorpay's checkout for real
+  keys and short-circuits to verify in mock mode; `Upgrade.tsx` wires both plans and
+  `AppContext.markPlan` reflects the entitlement from `/api/me`.
+- **WhatsApp OTP send.** `sendOtp` (`server/whatsapp.ts`) delivers the login code via
+  the Meta Cloud API — an approved AUTHENTICATION template (`WHATSAPP_OTP_TEMPLATE`)
+  when set, else plain text inside a 24h window; mock-safe (returns `devCode` for
+  cross-device login without creds). Wired into `POST /api/auth/login/start`.
+- **Installable PWA.** `public/manifest.webmanifest` + SVG app icons (a maskable
+  variant with safe-zone padding) + apple-web-app meta make the app installable to the
+  home screen; the manifest keeps the relative `./` scope so it works under a hash
+  router and inside Capacitor.
+- **API integration tests.** `server/api.test.ts` boots the real server as a
+  subprocess (temp SQLite, mock mode), polls health, and exercises the critical HTTP
+  path end-to-end — auth/session, `/api/me`, child creation + ownership isolation
+  (cross-account 404), reports, RAG status, aggregate accuracy, and the full mock
+  payment flow.
 
 ## Hosting
 

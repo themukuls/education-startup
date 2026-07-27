@@ -69,7 +69,7 @@ export interface ChildDTO {
 }
 
 export interface Me {
-  parent: { id: string; name: string; phone: string; channel: string; claimed: boolean } | null
+  parent: { id: string; name: string; phone: string; channel: string; claimed: boolean; plan: string } | null
   children: ChildDTO[]
 }
 

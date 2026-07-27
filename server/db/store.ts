@@ -25,6 +25,8 @@ export interface ParentRecord {
   channel?: string
   /** false while an anonymous guest; true once they save name + phone. */
   claimed?: boolean
+  /** subscription entitlement: 'free' | 'core' | 'annual'. */
+  plan?: string
 }
 
 // The interface is async so the same seam backs SQLite (sync driver, wrapped)
@@ -40,6 +42,8 @@ export interface Store {
   getParentByPhone(phone: string): Promise<ParentRecord | null>
   /** DPDP: permanently delete a parent and ALL their children's data + tokens. */
   deleteParent(id: string): Promise<void>
+  /** set a parent's subscription plan ('free' | 'core' | 'annual'). */
+  setPlan(id: string, plan: string): Promise<void>
   /** all children owned by a parent — the basis for per-user data isolation. */
   getChildrenForParent(parentId: string): Promise<ChildRecord[]>
   // ---- auth tokens (opaque bearer session) ----
@@ -96,7 +100,7 @@ export interface ChunkFilter {
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS parents (
-  id TEXT PRIMARY KEY, name TEXT NOT NULL, phone TEXT, link_channel TEXT, claimed INTEGER, created_at INTEGER
+  id TEXT PRIMARY KEY, name TEXT NOT NULL, phone TEXT, link_channel TEXT, claimed INTEGER, plan TEXT, created_at INTEGER
 );
 CREATE TABLE IF NOT EXISTS auth_tokens (
   token TEXT PRIMARY KEY, parent_id TEXT NOT NULL, created_at INTEGER, last_seen INTEGER
@@ -164,6 +168,12 @@ export class SqliteStore implements Store {
     } catch {
       /* column already present */
     }
+    // migration for DBs created before subscription plans
+    try {
+      this.db.exec('ALTER TABLE parents ADD COLUMN plan TEXT')
+    } catch {
+      /* column already present */
+    }
   }
 
   async isEmpty(): Promise<boolean> {
@@ -201,7 +211,12 @@ export class SqliteStore implements Store {
       phone: (r.phone as string) ?? '',
       channel: (r.link_channel as string) ?? 'manual',
       claimed: !!r.claimed,
+      plan: (r.plan as string) ?? 'free',
     }
+  }
+
+  async setPlan(id: string, plan: string): Promise<void> {
+    this.db.prepare('UPDATE parents SET plan = ? WHERE id = ?').run(plan, id)
   }
 
   async getParent(id: string): Promise<ParentRecord | null> {

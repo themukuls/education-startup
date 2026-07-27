@@ -8,6 +8,8 @@ import { createChild as apiCreateChild } from '../api/children'
 
 export type Goal = 'board' | 'weak-subject' | 'habit'
 export type AccountStatus = 'guest' | 'claimed'
+/** Entitlement tier. 'free' until a payment activates 'core' or 'annual'. */
+export type Plan = 'free' | 'core' | 'annual'
 /** How the parent claimed their record. WhatsApp = verified by the phone's own
  * WhatsApp (no OTP); manual = typed number (desktop fallback). */
 export type LinkChannel = 'whatsapp' | 'manual'
@@ -77,6 +79,12 @@ interface AppContextValue extends AppState {
   /** Switch the active child to another one this account owns. */
   switchChild: (id: string) => Promise<void>
 
+  // ---- entitlement / plan ----
+  /** Active subscription tier (from /api/me, updated after a payment). */
+  plan: Plan
+  /** Adopt a plan locally after a verified payment. */
+  markPlan: (p: Plan) => void
+
   // ---- guest-first / deferred save ----
   accountStatus: AccountStatus
   /** how they linked (empty while guest). */
@@ -126,6 +134,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [childId, setChildId] = useState<string | null>(null)
   const [childList, setChildList] = useState<ChildDTO[]>([])
   const [accountReady, setAccountReady] = useState(false)
+  const [plan, setPlan] = useState<Plan>('free')
 
   // Report state. Initialised synchronously with the synthetic stream so the UI
   // renders instantly and still works offline, then replaced by the child's
@@ -152,6 +161,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           setAccountStatus(me.parent.claimed ? 'claimed' : 'guest')
           ls.set('pp.status', me.parent.claimed ? 'claimed' : 'guest')
           if (me.parent.name) ls.set('pp.name', me.parent.name)
+          setPlan(me.parent.plan === 'core' ? 'core' : me.parent.plan === 'annual' ? 'annual' : 'free')
         }
         if (alive) setChildList(me.children)
         const first = me.children[0]
@@ -189,6 +199,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       childId,
       children: childList,
       accountReady,
+      plan,
+      markPlan: (p) => setPlan(p),
       setParentName,
       setGoal,
       setChild: (patch) => setChildState((prev) => ({ ...prev, ...patch })),
@@ -284,6 +296,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     childId,
     childList,
     accountReady,
+    plan,
   ])
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>

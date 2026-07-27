@@ -15,7 +15,7 @@ const { Pool } = pkg
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS parents (
-  id TEXT PRIMARY KEY, name TEXT NOT NULL, phone TEXT, link_channel TEXT, claimed INTEGER, created_at DOUBLE PRECISION
+  id TEXT PRIMARY KEY, name TEXT NOT NULL, phone TEXT, link_channel TEXT, claimed INTEGER, plan TEXT, created_at DOUBLE PRECISION
 );
 CREATE TABLE IF NOT EXISTS auth_tokens (
   token TEXT PRIMARY KEY, parent_id TEXT NOT NULL, created_at DOUBLE PRECISION, last_seen DOUBLE PRECISION
@@ -75,6 +75,7 @@ export class PostgresStore implements Store {
     await this.pool.query('ALTER TABLE exams ADD COLUMN IF NOT EXISTS subject TEXT')
     await this.pool.query('ALTER TABLE parents ADD COLUMN IF NOT EXISTS link_channel TEXT')
     await this.pool.query('ALTER TABLE parents ADD COLUMN IF NOT EXISTS claimed INTEGER')
+    await this.pool.query('ALTER TABLE parents ADD COLUMN IF NOT EXISTS plan TEXT')
   }
 
   async isEmpty(): Promise<boolean> {
@@ -110,6 +111,7 @@ export class PostgresStore implements Store {
       phone: (r.phone as string) ?? '',
       channel: (r.link_channel as string) ?? 'manual',
       claimed: !!r.claimed,
+      plan: (r.plan as string) ?? 'free',
     }
   }
 
@@ -122,6 +124,10 @@ export class PostgresStore implements Store {
     if (!phone) return null
     const { rows } = await this.pool.query("SELECT * FROM parents WHERE phone = $1 AND phone <> '' ORDER BY created_at LIMIT 1", [phone])
     return this.rowToParent(rows[0])
+  }
+
+  async setPlan(id: string, plan: string): Promise<void> {
+    await this.pool.query('UPDATE parents SET plan = $1 WHERE id = $2', [plan, id])
   }
 
   async deleteParent(id: string): Promise<void> {
