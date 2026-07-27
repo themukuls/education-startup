@@ -19,6 +19,20 @@ export async function fetchAccuracy(childId: string): Promise<AccuracyPayload> {
   return res.json()
 }
 
+export interface AggregateAccuracy {
+  predictions: number
+  within8Pct: number
+  meanAbsError: number
+  children: number
+}
+
+/** Anonymised cross-cohort accuracy (no auth). */
+export async function fetchAggregateAccuracy(): Promise<AggregateAccuracy> {
+  const res = await fetch(`${API_BASE}/api/accuracy/aggregate`, { signal: AbortSignal.timeout(15_000) })
+  if (!res.ok) throw new Error(`aggregate failed: ${res.status}`)
+  return res.json()
+}
+
 export async function enterMarks(
   childId: string,
   subject: string,

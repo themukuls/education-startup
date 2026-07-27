@@ -60,6 +60,9 @@ export interface Store {
   addPrediction(p: Prediction): Promise<string>
   getPredictions(childId: string): Promise<Prediction[]>
   getExamResults(childId: string): Promise<ExamResult[]>
+  /** All predictions/exams across every child — for the cross-cohort accuracy stat. */
+  allPredictions(): Promise<Prediction[]>
+  allExamResults(): Promise<ExamResult[]>
   /** everything the engine needs for one child, as of `asOf`. */
   getEngineInput(childId: string, asOf: number): Promise<EngineInput>
   // ---- RAG corpus ----
@@ -384,29 +387,20 @@ export class SqliteStore implements Store {
   }
 
   async getPredictions(childId: string): Promise<Prediction[]> {
-    const rows = this.db.prepare('SELECT * FROM predictions WHERE child_id = ?').all(childId) as Record<string, unknown>[]
-    return rows.map((r) => ({
-      id: r.id as string,
-      childId: r.child_id as string,
-      subject: r.subject as string,
-      examType: r.exam_type as string,
-      point: r.point as number,
-      low: r.low as number,
-      high: r.high as number,
-      basisReadiness: r.basis_readiness as number,
-      madeAt: r.made_at as number,
-    }))
+    return (this.db.prepare('SELECT * FROM predictions WHERE child_id = ?').all(childId) as Record<string, unknown>[]).map(rowToPrediction)
   }
 
   async getExamResults(childId: string): Promise<ExamResult[]> {
     const rows = this.db.prepare('SELECT * FROM exams WHERE child_id = ?').all(childId) as Record<string, unknown>[]
-    return rows.map((r) => ({
-      childId: r.child_id as string,
-      subject: (r.subject as string) ?? 'Maths',
-      examType: r.exam_type as string,
-      marks: r.parent_entered_marks as number,
-      date: r.date as number,
-    }))
+    return rows.map(rowToExam)
+  }
+
+  async allPredictions(): Promise<Prediction[]> {
+    return (this.db.prepare('SELECT * FROM predictions').all() as Record<string, unknown>[]).map(rowToPrediction)
+  }
+
+  async allExamResults(): Promise<ExamResult[]> {
+    return (this.db.prepare('SELECT * FROM exams').all() as Record<string, unknown>[]).map(rowToExam)
   }
 
   async getEngineInput(childId: string, asOf: number): Promise<EngineInput> {
@@ -476,6 +470,30 @@ export class SqliteStore implements Store {
 
   async close(): Promise<void> {
     this.db.close()
+  }
+}
+
+export function rowToPrediction(r: Record<string, unknown>): Prediction {
+  return {
+    id: r.id as string,
+    childId: r.child_id as string,
+    subject: r.subject as string,
+    examType: r.exam_type as string,
+    point: r.point as number,
+    low: r.low as number,
+    high: r.high as number,
+    basisReadiness: r.basis_readiness as number,
+    madeAt: r.made_at as number,
+  }
+}
+
+export function rowToExam(r: Record<string, unknown>): ExamResult {
+  return {
+    childId: r.child_id as string,
+    subject: (r.subject as string) ?? 'Maths',
+    examType: r.exam_type as string,
+    marks: r.parent_entered_marks as number,
+    date: r.date as number,
   }
 }
 

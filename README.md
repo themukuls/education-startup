@@ -298,8 +298,22 @@ chrome on the real screens.
 - **WhatsApp Business template** — for real OTP delivery and business-initiated
   card sends (both mock today).
 - **Payments** (Razorpay/UPI) to make the paywall real.
-- **Aggregate accuracy** — publish the cross-cohort "within ±8% for X% of
-  children" stat (per-child track record is live).
+
+## Details worth noting
+
+- **Self-hosted fonts.** Newsreader + Hanken Grotesk are bundled via
+  `@fontsource-variable` and imported in `main.tsx` — no Google Fonts CDN in the
+  client (removes a third-party domain from the critical path; the built output
+  contains zero `googleapis`/`gstatic` references).
+- **Cross-cohort accuracy.** `GET /api/accuracy/aggregate` (public, anonymised —
+  no PII) pools predictions across every child and reports "within ±8% on X% of
+  N predictions across M children". Shown as social proof on the Accuracy
+  screen. Declared before `/api/accuracy/:childId` so the literal path wins.
+- **Funnel screens are engine-driven.** `FixPlan` and `TermAudit` render from the
+  computed `report` (the weakest chapter + insight, the readiness trajectory, the
+  per-chapter ledger) rather than hardcoded numbers.
+- **CI** (`.github/workflows/ci.yml`) runs build + tests and a smoke job on every
+  push/PR.
 
 ## Hosting
 

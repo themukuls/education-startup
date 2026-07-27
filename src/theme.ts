@@ -59,8 +59,8 @@ export const c = {
   creamMute: '#B9A88C',
 } as const
 
-export const serif = "'Newsreader', Georgia, 'Times New Roman', serif"
-export const sans = "'Hanken Grotesk', system-ui, -apple-system, sans-serif"
+export const serif = "'Newsreader Variable', 'Newsreader', Georgia, 'Times New Roman', serif"
+export const sans = "'Hanken Grotesk Variable', 'Hanken Grotesk', system-ui, -apple-system, sans-serif"
 
 // Reusable phone-frame background helpers
 export const paperGradient =

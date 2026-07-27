@@ -445,6 +445,19 @@ async function accuracyPayload(childId: string) {
   }
 }
 
+// Cross-cohort accuracy — anonymised aggregate social proof (no PII). Public.
+// Declared BEFORE the :childId route so 'aggregate' isn't captured as a param.
+app.get('/api/accuracy/aggregate', async (_req, res) => {
+  const store = await getStore()
+  const [preds, exams] = await Promise.all([store.allPredictions(), store.allExamResults()])
+  // resolvePredictions pairs each exam to the prediction made before it, matched
+  // by childId — so pooling across children is correct.
+  const resolved = resolvePredictions(preds, exams)
+  const stats = accuracyStats(resolved)
+  const children = new Set(preds.map((p) => p.childId)).size
+  res.json({ predictions: stats.n, within8Pct: stats.within8Pct, meanAbsError: stats.meanAbsError, children })
+})
+
 app.get('/api/accuracy/:childId', requireAuth, async (req, res) => {
   if (!(await ownsChild(res, req.params.childId))) return res.status(404).json({ error: 'child not found' })
   res.json(await accuracyPayload(req.params.childId))

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import AppShell from '../components/AppShell'
 import { useApp } from '../state/AppContext'
-import { fetchAccuracy, enterMarks, type AccuracyPayload } from '../api/accuracy'
+import { fetchAccuracy, enterMarks, fetchAggregateAccuracy, type AccuracyPayload, type AggregateAccuracy } from '../api/accuracy'
 import { c, serif } from '../theme'
 
 const EXAM_LABEL: Record<string, string> = {
@@ -21,6 +21,7 @@ export default function Accuracy() {
   const [examType, setExamType] = useState('school_ut')
   const [marks, setMarks] = useState('')
   const [saving, setSaving] = useState(false)
+  const [agg, setAgg] = useState<AggregateAccuracy | null>(null)
 
   useEffect(() => {
     if (!childId) return
@@ -32,6 +33,16 @@ export default function Accuracy() {
       alive = false
     }
   }, [childId])
+
+  useEffect(() => {
+    let alive = true
+    fetchAggregateAccuracy()
+      .then((a) => alive && setAgg(a))
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [])
 
   async function submit() {
     const n = Number(marks)
@@ -176,6 +187,16 @@ export default function Accuracy() {
           We compare it to the prediction we already made — and show you if we were wrong.
         </p>
       </div>
+
+      {/* Cross-cohort social proof */}
+      {agg && agg.predictions > 0 && (
+        <div style={{ marginTop: 14, background: c.blueWash, border: `1px solid ${c.blueBorder}`, borderRadius: 16, padding: '15px 18px', display: 'flex', alignItems: 'center', gap: 14 }}>
+          <div style={{ fontFamily: serif, fontSize: 30, fontWeight: 700, color: c.blue, lineHeight: 1 }}>{agg.within8Pct}%</div>
+          <div style={{ fontSize: 13, color: c.blueDeep, fontWeight: 600, lineHeight: 1.4 }}>
+            Across <b>{agg.children}</b> {agg.children === 1 ? 'child' : 'children'} and <b>{agg.predictions}</b> predictions, ParentProof has landed within ±8 points {agg.within8Pct}% of the time.
+          </div>
+        </div>
+      )}
      </div>
     </AppShell>
   )

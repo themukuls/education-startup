@@ -9,7 +9,7 @@ import pkg from 'pg'
 import { randomUUID } from 'node:crypto'
 import type { AnswerEvent, EngineInput, ExamEvent, SessionEvent } from '../../src/engine/types.ts'
 import type { ExamResult, Prediction } from '../../src/engine/accuracy.ts'
-import { rowToChunk, type ChildRecord, type ChunkFilter, type ParentRecord, type RagChunk, type Store } from './store.ts'
+import { rowToChunk, rowToExam, rowToPrediction, type ChildRecord, type ChunkFilter, type ParentRecord, type RagChunk, type Store } from './store.ts'
 
 const { Pool } = pkg
 
@@ -280,28 +280,22 @@ export class PostgresStore implements Store {
 
   async getPredictions(childId: string): Promise<Prediction[]> {
     const { rows } = await this.pool.query('SELECT * FROM predictions WHERE child_id = $1', [childId])
-    return rows.map((r) => ({
-      id: r.id,
-      childId: r.child_id,
-      subject: r.subject,
-      examType: r.exam_type,
-      point: r.point,
-      low: r.low,
-      high: r.high,
-      basisReadiness: r.basis_readiness,
-      madeAt: r.made_at,
-    }))
+    return rows.map(rowToPrediction)
   }
 
   async getExamResults(childId: string): Promise<ExamResult[]> {
     const { rows } = await this.pool.query('SELECT * FROM exams WHERE child_id = $1', [childId])
-    return rows.map((r) => ({
-      childId: r.child_id,
-      subject: r.subject ?? 'Maths',
-      examType: r.exam_type,
-      marks: r.parent_entered_marks,
-      date: r.date,
-    }))
+    return rows.map(rowToExam)
+  }
+
+  async allPredictions(): Promise<Prediction[]> {
+    const { rows } = await this.pool.query('SELECT * FROM predictions')
+    return rows.map(rowToPrediction)
+  }
+
+  async allExamResults(): Promise<ExamResult[]> {
+    const { rows } = await this.pool.query('SELECT * FROM exams')
+    return rows.map(rowToExam)
   }
 
   async getEngineInput(childId: string, asOf: number): Promise<EngineInput> {

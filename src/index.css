@@ -13,7 +13,7 @@ body {
 body {
   background: #d8d0c1;
   color: #1e1b16;
-  font-family: 'Hanken Grotesk', system-ui, -apple-system, sans-serif;
+  font-family: 'Hanken Grotesk Variable', 'Hanken Grotesk', system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
