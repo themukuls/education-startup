@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run build
+      - run: npm test
+
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm ci
+      - name: Start API and run smoke test
+        env:
+          DB_PATH: /tmp/ci.db
+          PORT: '8787'
+        run: |
+          npm run server:start &
+          SERVER_PID=$!
+
+          cleanup() {
+            kill "$SERVER_PID" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+
+          echo "Waiting for API to become healthy..."
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:8787/api/health >/dev/null 2>&1; then
+              echo "API is healthy."
+              break
+            fi
+            if [ "$i" -eq 30 ]; then
+              echo "API did not become healthy in time." >&2
+              exit 1
+            fi
+            sleep 1
+          done
+
+          npm run smoke

@@ -3,7 +3,7 @@ import { computeReport, type LearningReport } from '../engine'
 import { buildStream } from '../engine/synthetic'
 import { fetchReport, postSession, type RawAnswer } from '../api/persistence'
 import { saveAccount } from '../api/account'
-import { ensureSession, fetchMe } from '../api/auth'
+import { ensureSession, fetchMe, type ChildDTO } from '../api/auth'
 import { createChild as apiCreateChild } from '../api/children'
 
 export type Goal = 'board' | 'weak-subject' | 'habit'
@@ -66,12 +66,16 @@ interface AppContextValue extends AppState {
   report: LearningReport
   /** The active child's id in the store (from /api/me), or null until it loads. */
   childId: string | null
+  /** all children this account owns (for the switcher). */
+  children: ChildDTO[]
   /** true once we know whether the account has a child (avoids empty-state flash). */
   accountReady: boolean
   /** Create this account's child from the onboarding form; adopts it as active. */
   createChild: () => Promise<void>
   /** Load the seeded demo child (for exploring), adopting it as active. */
   loadDemo: () => Promise<void>
+  /** Switch the active child to another one this account owns. */
+  switchChild: (id: string) => Promise<void>
 
   // ---- guest-first / deferred save ----
   accountStatus: AccountStatus
@@ -120,6 +124,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [lastScore, setLastScore] = useState<number | null>(null)
   const [answered, setAnswered] = useState(0)
   const [childId, setChildId] = useState<string | null>(null)
+  const [childList, setChildList] = useState<ChildDTO[]>([])
   const [accountReady, setAccountReady] = useState(false)
 
   // Report state. Initialised synchronously with the synthetic stream so the UI
@@ -148,6 +153,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           ls.set('pp.status', me.parent.claimed ? 'claimed' : 'guest')
           if (me.parent.name) ls.set('pp.name', me.parent.name)
         }
+        if (alive) setChildList(me.children)
         const first = me.children[0]
         if (first) {
           setChildId(first.id)
@@ -181,6 +187,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       answered,
       report,
       childId,
+      children: childList,
       accountReady,
       setParentName,
       setGoal,
@@ -190,6 +197,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           { name: child.name.trim() || 'My child', board: child.board, klass: child.klass, subjects: child.subjects, monthlySpend: child.monthlySpend },
           false,
         )
+        setChildList((prev) => (prev.some((x) => x.id === c.id) ? prev : [...prev, c]))
         setChildId(c.id)
         setChildState({ name: c.name, board: c.board, klass: c.klass, subjects: c.subjects, monthlySpend: c.monthlySpend })
         try {
@@ -203,9 +211,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
           { name: 'Mukul', board: 'CBSE', klass: 10, subjects: ['Maths', 'Science'], monthlySpend: 5000 },
           true,
         )
+        setChildList((prev) => (prev.some((x) => x.id === c.id) ? prev : [...prev, c]))
         setChildId(c.id)
         setChildState({ name: c.name, board: c.board, klass: c.klass, subjects: c.subjects, monthlySpend: c.monthlySpend })
         setReport(await fetchReport(c.id))
+      },
+      switchChild: async (id) => {
+        const c = childList.find((x) => x.id === id)
+        if (!c || id === childId) return
+        setChildId(c.id)
+        setChildState({ name: c.name, board: c.board, klass: c.klass, subjects: c.subjects, monthlySpend: c.monthlySpend })
+        try {
+          setReport(await fetchReport(c.id))
+        } catch {
+          /* keep current until it loads */
+        }
       },
       recordTest: (score, ans) => {
         setLastScore(score)
@@ -262,6 +282,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     answered,
     report,
     childId,
+    childList,
     accountReady,
   ])
 

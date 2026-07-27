@@ -62,7 +62,9 @@ app.post('/api/generate-test', async (req, res) => {
         const hits = await retrieve(
           store,
           `${request.subject} class ${request.klass} ${request.chapter}`,
-          { board: request.board, klass: request.klass, subject: request.subject, chapter: request.chapter },
+          // filter at subject level; cosine ranks the right chapter (robust to
+          // chapter-name differences across the corpus)
+          { board: request.board, klass: request.klass, subject: request.subject },
           4,
           credsFromEnv(),
         )

@@ -8,7 +8,7 @@ import { c, serif } from '../theme'
 // Screen 13 — You & your children (control). Parent-as-owner + DPDP consent + add-child.
 export default function You() {
   const nav = useNavigate()
-  const { parentName, parentInitial, parentPhone, parentChannel, child, accountStatus, openSaveGate } = useApp()
+  const { parentName, parentInitial, parentPhone, parentChannel, child, childId, children, switchChild, setChild, accountStatus, openSaveGate } = useApp()
   const [appearance, setAppearance] = useState<'Light' | 'Dark'>('Light')
   const [lang, setLang] = useState<'EN' | 'हिं'>('EN')
   const isGuest = accountStatus === 'guest'
@@ -37,23 +37,41 @@ export default function You() {
         <span style={{ background: 'rgba(255,255,255,.16)', borderRadius: 10, padding: '5px 10px', fontSize: 11, fontWeight: 800 }}>{isGuest ? 'Guest' : 'Core'}</span>
       </div>
 
-      <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', color: c.ink3, marginBottom: 9 }}>Children</div>
-      <div style={{ background: c.white, border: `1px solid ${c.line2}`, borderRadius: 16, padding: '14px 16px', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 13 }}>
-        <div style={{ width: 38, height: 38, borderRadius: '50%', background: c.blue, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, color: '#fff', flex: 'none' }}>{child.name[0]}</div>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 15, fontWeight: 800 }}>{child.name}</div>
-          <div style={{ fontSize: 12.5, color: c.ink3, fontWeight: 600 }}>Class {child.klass} {child.board} · {child.subjects.join(', ')}</div>
-        </div>
-        <span style={{ color: c.ink4, fontWeight: 700 }}>›</span>
+      <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', color: c.ink3, marginBottom: 9 }}>
+        Children{children.length > 1 ? ` · ${children.length}` : ''}
       </div>
+      {(children.length ? children : [{ id: childId ?? 'x', name: child.name, board: child.board, klass: child.klass, subjects: child.subjects }]).map((kid) => {
+        const active = kid.id === childId
+        return (
+          <div
+            key={kid.id}
+            onClick={() => !active && switchChild(kid.id)}
+            style={{ background: c.white, border: `${active ? 1.5 : 1}px solid ${active ? c.blue : c.line2}`, borderRadius: 16, padding: '14px 16px', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 13, cursor: active ? 'default' : 'pointer' }}
+          >
+            <div style={{ width: 38, height: 38, borderRadius: '50%', background: active ? c.blue : c.ink4, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, color: '#fff', flex: 'none' }}>{kid.name[0]?.toUpperCase()}</div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 15, fontWeight: 800 }}>{kid.name}</div>
+              <div style={{ fontSize: 12.5, color: c.ink3, fontWeight: 600 }}>Class {kid.klass} {kid.board} · {kid.subjects.join(', ')}</div>
+            </div>
+            {active ? (
+              <span style={{ background: c.blueWash, color: c.blue, borderRadius: 9, padding: '4px 9px', fontSize: 11, fontWeight: 800 }}>Active</span>
+            ) : (
+              <span style={{ fontSize: 12, fontWeight: 800, color: c.blue }}>Switch</span>
+            )}
+          </div>
+        )
+      })}
       <button
-        onClick={() => alert('Add a sibling — Family add-on (+₹499 / child)')}
-        style={{ width: '100%', textAlign: 'left', background: 'none', border: '1.5px dashed #CBBFA9', borderRadius: 16, padding: '14px 16px', marginBottom: 18, display: 'flex', alignItems: 'center', gap: 13 }}
+        onClick={() => {
+          setChild({ name: '', board: 'CBSE', klass: 10, subjects: ['Maths', 'Science'], monthlySpend: 0 })
+          nav('/onboarding/child')
+        }}
+        style={{ width: '100%', textAlign: 'left', background: 'none', border: '1.5px dashed #CBBFA9', borderRadius: 16, padding: '14px 16px', marginBottom: 18, display: 'flex', alignItems: 'center', gap: 13, cursor: 'pointer' }}
       >
         <div style={{ width: 38, height: 38, borderRadius: '50%', border: '2px solid #CBBFA9', display: 'flex', alignItems: 'center', justifyContent: 'center', color: c.ink4, fontSize: 22, flex: 'none' }}>+</div>
         <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 15, fontWeight: 800, color: c.ink2 }}>Add a sibling</div>
-          <div style={{ fontSize: 12.5, color: c.ink3, fontWeight: 600 }}>Family add-on · +₹499 / child</div>
+          <div style={{ fontSize: 15, fontWeight: 800, color: c.ink2 }}>Add a child</div>
+          <div style={{ fontSize: 12.5, color: c.ink3, fontWeight: 600 }}>Run a separate audit for each child</div>
         </div>
       </button>
 

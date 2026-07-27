@@ -170,6 +170,10 @@ Every browser gets its **own** account — there is no shared/global user any mo
 Verified end-to-end: two sessions get distinct tokens and isolated children;
 each reads only its own report; cross-account reads 404.
 
+- **Multiple children per account.** `POST /api/children` adds a child;
+  `GET /api/me` returns all of them; the You screen lists them with an **Active**
+  marker and one-tap **Switch** (`switchChild` in `AppContext` re-points the
+  active child + report). "Add a child" reuses the onboarding flow.
 - **Cross-device login.** A claimed account resumes on a new device via a
   one-time code sent to its WhatsApp number: `POST /api/auth/login/start` (find
   parent by verified phone → store a 6-digit code, 10-min expiry, ≤5 attempts)
@@ -291,8 +295,8 @@ chrome on the real screens.
 - **WhatsApp OTP delivery** — cross-device login works; wiring an `auth_code`
   WhatsApp template makes the code actually arrive in production (mock returns it
   today).
-- **Multi-child switcher** — `getChildrenForParent` already returns all of them;
-  add the UI to switch/add beyond the first child.
+- **WhatsApp Business template** — for real OTP delivery and business-initiated
+  card sends (both mock today).
 - **Payments** (Razorpay/UPI) to make the paywall real.
 - **Aggregate accuracy** — publish the cross-cohort "within ±8% for X% of
   children" stat (per-child track record is live).
@@ -361,7 +365,10 @@ guardrails still run). A starter CBSE Class-10 Maths corpus auto-seeds on boot;
 `POST /api/rag/ingest` adds material, `GET /api/rag/search` inspects retrieval.
 Ranking is JS-cosine over metadata-filtered candidates today (portable, tested);
 at scale, swap `getChunks` for a pgvector `<=>` query — nothing else changes.
-Design notes in **[`docs/LLM_AND_RAG.md`](docs/LLM_AND_RAG.md)**.
+The starter corpus covers CBSE Class-10 **Maths + Science** (71 chunks across ~26
+chapters); retrieval filters by subject and cosine-ranks the chapter, so it's
+robust to chapter-name differences. Design notes in
+**[`docs/LLM_AND_RAG.md`](docs/LLM_AND_RAG.md)**.
 
 ## Run it
 
