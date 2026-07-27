@@ -8,6 +8,7 @@ import { generateTest } from './generate.ts'
 import { renderCard } from './render.ts'
 import { sendCard, hasWhatsApp } from './whatsapp.ts'
 import { pickCreds, credsFromHeaders, credsFromEnv, llmText } from './llm/index.ts'
+import { retrieve, ingest, groundingBlock, type RawDoc } from './rag/index.ts'
 import { getStore, storeKind, mintAnonAccount, seedDemoChild } from './db/index.ts'
 import { requireAuth, ownsChild, newToken } from './auth.ts'
 import { computeReport } from '../src/engine/index.ts'
@@ -49,12 +50,30 @@ app.post('/api/generate-test', async (req, res) => {
   }
 
   try {
-    const { items, source, provider } = await generateTest(request, pickCreds(req))
+    // RAG: ground generation in the syllabus corpus for this board/class/chapter.
+    let grounding = ''
+    try {
+      const store = await getStore()
+      if ((await store.countChunks()) > 0) {
+        const hits = await retrieve(
+          store,
+          `${request.subject} class ${request.klass} ${request.chapter}`,
+          { board: request.board, klass: request.klass, subject: request.subject, chapter: request.chapter },
+          4,
+          credsFromEnv(),
+        )
+        grounding = groundingBlock(hits)
+      }
+    } catch (e) {
+      console.warn('[rag] retrieve failed:', e)
+    }
+
+    const { items, source, provider, grounded } = await generateTest(request, pickCreds(req), grounding)
     if (!items.length) {
       return res.status(502).json({ error: 'no valid questions produced', source })
     }
     const questions = toQuestions(items, request.subject, request.chapter)
-    res.json({ questions, source, provider, meta: { requested: request.count, delivered: questions.length } })
+    res.json({ questions, source, provider, grounded, meta: { requested: request.count, delivered: questions.length } })
   } catch (err) {
     console.error('[generate-test] failed:', err)
     res.status(500).json({ error: 'generation failed', detail: String((err as Error).message ?? err) })
@@ -222,6 +241,40 @@ app.post('/api/children', requireAuth, async (req, res) => {
   } catch (err) {
     console.error('[children] failed:', err)
     res.status(500).json({ error: 'could not add child' })
+  }
+})
+
+// ---- RAG: syllabus corpus + retrieval ---------------------------------------
+app.get('/api/rag/status', async (_req, res) => {
+  const store = await getStore()
+  res.json({ chunks: await store.countChunks() })
+})
+
+// Debug/inspection: top-k retrieved chunks for a query within a filter.
+app.get('/api/rag/search', async (req, res) => {
+  const q = String(req.query.q ?? '')
+  if (!q) return res.status(400).json({ error: 'q required' })
+  const filter = {
+    board: req.query.board ? String(req.query.board) : undefined,
+    klass: req.query.klass ? Number(req.query.klass) : undefined,
+    subject: req.query.subject ? String(req.query.subject) : undefined,
+    chapter: req.query.chapter ? String(req.query.chapter) : undefined,
+  }
+  const store = await getStore()
+  const hits = await retrieve(store, q, filter, Number(req.query.k ?? 4), credsFromEnv())
+  res.json({ hits: hits.map((h) => ({ score: Number(h.score.toFixed(4)), chapter: h.chunk.chapter, source: h.chunk.source, content: h.chunk.content })) })
+})
+
+// Ingest syllabus/textbook material (admin).
+app.post('/api/rag/ingest', async (req, res) => {
+  const docs = Array.isArray((req.body ?? {}).docs) ? ((req.body.docs as unknown[]) as RawDoc[]) : []
+  if (!docs.length) return res.status(400).json({ error: 'docs[] required' })
+  try {
+    const added = await ingest(await getStore(), docs, credsFromEnv())
+    res.json({ ok: true, added })
+  } catch (err) {
+    console.error('[rag/ingest] failed:', err)
+    res.status(500).json({ error: 'ingest failed' })
   }
 })
 

@@ -9,7 +9,7 @@ import pkg from 'pg'
 import { randomUUID } from 'node:crypto'
 import type { AnswerEvent, EngineInput, ExamEvent, SessionEvent } from '../../src/engine/types.ts'
 import type { ExamResult, Prediction } from '../../src/engine/accuracy.ts'
-import type { ChildRecord, ParentRecord, Store } from './store.ts'
+import { rowToChunk, type ChildRecord, type ChunkFilter, type ParentRecord, type RagChunk, type Store } from './store.ts'
 
 const { Pool } = pkg
 
@@ -24,6 +24,11 @@ CREATE INDEX IF NOT EXISTS idx_tokens_parent ON auth_tokens(parent_id);
 CREATE TABLE IF NOT EXISTS login_codes (
   phone TEXT PRIMARY KEY, code TEXT NOT NULL, expires_at DOUBLE PRECISION, attempts INTEGER, created_at DOUBLE PRECISION
 );
+CREATE TABLE IF NOT EXISTS rag_chunks (
+  id TEXT PRIMARY KEY, board TEXT, klass INTEGER, subject TEXT, chapter TEXT,
+  source TEXT, content TEXT, embedding TEXT, created_at DOUBLE PRECISION
+);
+CREATE INDEX IF NOT EXISTS idx_rag_meta ON rag_chunks(board, klass, subject, chapter);
 CREATE TABLE IF NOT EXISTS children (
   id TEXT PRIMARY KEY, parent_id TEXT, name TEXT NOT NULL, board TEXT, klass INTEGER,
   subjects TEXT, monthly_spend INTEGER, created_at DOUBLE PRECISION
@@ -313,6 +318,50 @@ export class PostgresStore implements Store {
       date: r.date,
     }))
     return { childId, asOf, answers, sessions, exams }
+  }
+
+  async upsertChunks(chunks: RagChunk[]): Promise<void> {
+    if (chunks.length === 0) return
+    const client = await this.pool.connect()
+    try {
+      await client.query('BEGIN')
+      for (const ch of chunks) {
+        await client.query(
+          `INSERT INTO rag_chunks (id, board, klass, subject, chapter, source, content, embedding, created_at)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+           ON CONFLICT (id) DO UPDATE SET board=EXCLUDED.board, klass=EXCLUDED.klass, subject=EXCLUDED.subject,
+             chapter=EXCLUDED.chapter, source=EXCLUDED.source, content=EXCLUDED.content, embedding=EXCLUDED.embedding`,
+          [ch.id, ch.board, ch.klass, ch.subject, ch.chapter, ch.source, ch.content, JSON.stringify(ch.embedding), Date.now()],
+        )
+      }
+      await client.query('COMMIT')
+    } catch (err) {
+      await client.query('ROLLBACK')
+      throw err
+    } finally {
+      client.release()
+    }
+  }
+
+  async getChunks(filter: ChunkFilter): Promise<RagChunk[]> {
+    const cond: string[] = []
+    const params: unknown[] = []
+    const add = (col: string, val: unknown) => {
+      params.push(val)
+      cond.push(`${col} = $${params.length}`)
+    }
+    if (filter.board) add('board', filter.board)
+    if (filter.klass != null) add('klass', filter.klass)
+    if (filter.subject) add('subject', filter.subject)
+    if (filter.chapter) add('chapter', filter.chapter)
+    const where = cond.length ? `WHERE ${cond.join(' AND ')}` : ''
+    const { rows } = await this.pool.query(`SELECT * FROM rag_chunks ${where}`, params)
+    return rows.map(rowToChunk)
+  }
+
+  async countChunks(): Promise<number> {
+    const { rows } = await this.pool.query<{ n: string }>('SELECT COUNT(*)::int AS n FROM rag_chunks')
+    return Number(rows[0].n)
   }
 
   async close(): Promise<void> {

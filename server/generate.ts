@@ -35,7 +35,7 @@ Hard rules:
 - Use plain text for maths (x^2, sqrt, /, ×). No LaTeX, no images.
 Return ONLY a JSON object of the form {"questions":[{"prompt","options":[4],"answer","cogLevel","format","difficulty","misconception"}, ...]}.`
 
-function buildGenPrompt(req: GenerateRequest): string {
+function buildGenPrompt(req: GenerateRequest, grounding = ''): string {
   const mix = req.mix
     ? Object.entries(req.mix)
         .map(([k, v]) => `${v}×${k}`)
@@ -46,16 +46,16 @@ function buildGenPrompt(req: GenerateRequest): string {
 - Class: ${req.klass}
 - Subject: ${req.subject}
 - Chapter: ${req.chapter}
-- Cognitive mix: ${mix}
+- Cognitive mix: ${mix}${grounding}
 
 Return the JSON object now.`
 }
 
 /** Generation call. Returns items that pass the structural guardrail. */
-export async function generateWithProvider(creds: LlmCreds, req: GenerateRequest): Promise<GeneratedItem[]> {
+export async function generateWithProvider(creds: LlmCreds, req: GenerateRequest, grounding = ''): Promise<GeneratedItem[]> {
   const parsed = await llmJson<{ questions?: unknown[] }>(creds, {
     system: GEN_SYSTEM,
-    user: buildGenPrompt(req),
+    user: buildGenPrompt(req, grounding),
     maxTokens: 8000,
   })
   const { valid, dropped } = validateItems(Array.isArray(parsed.questions) ? parsed.questions : [])
@@ -111,19 +111,21 @@ export function mockGenerate(req: GenerateRequest): GeneratedItem[] {
   }))
 }
 
-/** Full pipeline: generate → verify → validated items (or mock when no creds). */
+/** Full pipeline: generate → verify → validated items (or mock when no creds).
+ * `grounding` is optional retrieved syllabus context (RAG). */
 export async function generateTest(
   req: GenerateRequest,
   creds: LlmCreds | null,
-): Promise<{ items: GeneratedItem[]; source: 'llm' | 'mock'; provider?: string }> {
-  if (!creds) return { items: mockGenerate(req), source: 'mock' }
+  grounding = '',
+): Promise<{ items: GeneratedItem[]; source: 'llm' | 'mock'; provider?: string; grounded?: boolean }> {
+  if (!creds) return { items: mockGenerate(req), source: 'mock', grounded: !!grounding }
 
-  let items = await generateWithProvider(creds, req)
+  let items = await generateWithProvider(creds, req, grounding)
   // one retry if the guardrail left us short
   if (items.length < req.count) {
-    const more = await generateWithProvider(creds, { ...req, count: req.count - items.length })
+    const more = await generateWithProvider(creds, { ...req, count: req.count - items.length }, grounding)
     items = [...items, ...more]
   }
   items = await verifyAnswers(creds, items)
-  return { items: items.slice(0, req.count), source: 'llm', provider: creds.provider }
+  return { items: items.slice(0, req.count), source: 'llm', provider: creds.provider, grounded: !!grounding }
 }

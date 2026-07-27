@@ -8,6 +8,7 @@ import { randomUUID } from 'node:crypto'
 import { SqliteStore, type Store, type StoreKind } from './store.ts'
 import { PostgresStore } from './postgres.ts'
 import { buildStream } from '../../src/engine/synthetic.ts'
+import { seedCorpusIfEmpty } from '../rag/corpus.ts'
 
 const DB_PATH = process.env.DB_PATH ?? 'parentproof.db'
 const DATABASE_URL = process.env.DATABASE_URL ?? ''
@@ -25,6 +26,7 @@ export function getStore(): Promise<Store> {
 async function create(): Promise<Store> {
   const s: Store = DATABASE_URL ? new PostgresStore(DATABASE_URL) : new SqliteStore(DB_PATH)
   await s.init()
+  await seedCorpusIfEmpty(s) // ground question generation in a starter syllabus corpus
   return s
 }
 

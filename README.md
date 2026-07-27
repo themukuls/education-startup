@@ -329,8 +329,18 @@ a risk.
   user-facing feature.**
 - **Mock without credentials** — no key anywhere → the deterministic static bank
   and the engine's own safe card copy, so the whole app still runs.
-- **RAG (planned)** — syllabus retrieval on Supabase `pgvector`, detailed in
-  **[`docs/LLM_AND_RAG.md`](docs/LLM_AND_RAG.md)** along with the provider design.
+
+**RAG — syllabus-grounded generation.** `server/rag/` grounds question authoring
+in the child's actual board/class/chapter. `rag_chunks` stores syllabus passages
++ embeddings (both stores); `embed.ts` uses a real embedding model with a key
+(Gemini/OpenAI) or a deterministic hashing embedder offline; `ingest`/`retrieve`
+embed → metadata-filter → cosine-rank the top-k, which `/api/generate-test`
+injects as grounding context (so a real model writes syllabus-exact items — the
+guardrails still run). A starter CBSE Class-10 Maths corpus auto-seeds on boot;
+`POST /api/rag/ingest` adds material, `GET /api/rag/search` inspects retrieval.
+Ranking is JS-cosine over metadata-filtered candidates today (portable, tested);
+at scale, swap `getChunks` for a pgvector `<=>` query — nothing else changes.
+Design notes in **[`docs/LLM_AND_RAG.md`](docs/LLM_AND_RAG.md)**.
 
 ## Run it
 

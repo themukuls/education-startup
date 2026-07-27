@@ -60,11 +60,34 @@ export interface Store {
   getExamResults(childId: string): Promise<ExamResult[]>
   /** everything the engine needs for one child, as of `asOf`. */
   getEngineInput(childId: string, asOf: number): Promise<EngineInput>
+  // ---- RAG corpus ----
+  upsertChunks(chunks: RagChunk[]): Promise<void>
+  /** chunks matching the metadata filter (embeddings included, ranked in JS). */
+  getChunks(filter: ChunkFilter): Promise<RagChunk[]>
+  countChunks(): Promise<number>
   close(): Promise<void>
 }
 
 /** The backend a Store speaks to — surfaced on /api/health. */
 export type StoreKind = 'sqlite' | 'postgres'
+
+/** A syllabus/textbook passage + its embedding, for retrieval-augmented gen. */
+export interface RagChunk {
+  id: string
+  board: string
+  klass: number
+  subject: string
+  chapter: string
+  source: string
+  content: string
+  embedding: number[]
+}
+export interface ChunkFilter {
+  board?: string
+  klass?: number
+  subject?: string
+  chapter?: string
+}
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS parents (
@@ -77,6 +100,11 @@ CREATE INDEX IF NOT EXISTS idx_tokens_parent ON auth_tokens(parent_id);
 CREATE TABLE IF NOT EXISTS login_codes (
   phone TEXT PRIMARY KEY, code TEXT NOT NULL, expires_at INTEGER, attempts INTEGER, created_at INTEGER
 );
+CREATE TABLE IF NOT EXISTS rag_chunks (
+  id TEXT PRIMARY KEY, board TEXT, klass INTEGER, subject TEXT, chapter TEXT,
+  source TEXT, content TEXT, embedding TEXT, created_at INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_rag_meta ON rag_chunks(board, klass, subject, chapter);
 CREATE TABLE IF NOT EXISTS children (
   id TEXT PRIMARY KEY, parent_id TEXT, name TEXT NOT NULL, board TEXT, klass INTEGER,
   subjects TEXT, monthly_spend INTEGER, created_at INTEGER
@@ -402,7 +430,48 @@ export class SqliteStore implements Store {
     return { childId, asOf, answers, sessions, exams }
   }
 
+  async upsertChunks(chunks: RagChunk[]): Promise<void> {
+    const stmt = this.db.prepare(
+      `INSERT OR REPLACE INTO rag_chunks (id, board, klass, subject, chapter, source, content, embedding, created_at)
+       VALUES (@id, @board, @klass, @subject, @chapter, @source, @content, @embedding, @createdAt)`,
+    )
+    const many = this.db.transaction((rows: RagChunk[]) => {
+      for (const ch of rows) stmt.run({ ...ch, embedding: JSON.stringify(ch.embedding), createdAt: Date.now() })
+    })
+    many(chunks)
+  }
+
+  async getChunks(filter: ChunkFilter): Promise<RagChunk[]> {
+    const cond: string[] = []
+    const params: Record<string, unknown> = {}
+    if (filter.board) (cond.push('board = @board'), (params.board = filter.board))
+    if (filter.klass != null) (cond.push('klass = @klass'), (params.klass = filter.klass))
+    if (filter.subject) (cond.push('subject = @subject'), (params.subject = filter.subject))
+    if (filter.chapter) (cond.push('chapter = @chapter'), (params.chapter = filter.chapter))
+    const where = cond.length ? `WHERE ${cond.join(' AND ')}` : ''
+    const rows = this.db.prepare(`SELECT * FROM rag_chunks ${where}`).all(params) as Record<string, unknown>[]
+    return rows.map(rowToChunk)
+  }
+
+  async countChunks(): Promise<number> {
+    return (this.db.prepare('SELECT COUNT(*) AS n FROM rag_chunks').get() as { n: number }).n
+  }
+
   async close(): Promise<void> {
     this.db.close()
+  }
+}
+
+/** Shared row → RagChunk (embedding stored as JSON text in both backends). */
+export function rowToChunk(r: Record<string, unknown>): RagChunk {
+  return {
+    id: r.id as string,
+    board: (r.board as string) ?? '',
+    klass: (r.klass as number) ?? 0,
+    subject: (r.subject as string) ?? '',
+    chapter: (r.chapter as string) ?? '',
+    source: (r.source as string) ?? '',
+    content: (r.content as string) ?? '',
+    embedding: JSON.parse((r.embedding as string) || '[]'),
   }
 }
