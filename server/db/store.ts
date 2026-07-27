@@ -38,6 +38,8 @@ export interface Store {
   createParent(p: ParentRecord): Promise<void>
   getParent(id: string): Promise<ParentRecord | null>
   getParentByPhone(phone: string): Promise<ParentRecord | null>
+  /** DPDP: permanently delete a parent and ALL their children's data + tokens. */
+  deleteParent(id: string): Promise<void>
   /** all children owned by a parent — the basis for per-user data isolation. */
   getChildrenForParent(parentId: string): Promise<ChildRecord[]>
   // ---- auth tokens (opaque bearer session) ----
@@ -210,6 +212,21 @@ export class SqliteStore implements Store {
         | Record<string, unknown>
         | undefined,
     )
+  }
+
+  async deleteParent(id: string): Promise<void> {
+    const tx = this.db.transaction((pid: string) => {
+      const kids = 'SELECT id FROM children WHERE parent_id = ?'
+      this.db.prepare(`DELETE FROM answers WHERE child_id IN (${kids})`).run(pid)
+      this.db.prepare(`DELETE FROM sessions WHERE child_id IN (${kids})`).run(pid)
+      this.db.prepare(`DELETE FROM exams WHERE child_id IN (${kids})`).run(pid)
+      this.db.prepare(`DELETE FROM predictions WHERE child_id IN (${kids})`).run(pid)
+      this.db.prepare('DELETE FROM login_codes WHERE phone = (SELECT phone FROM parents WHERE id = ?)').run(pid)
+      this.db.prepare('DELETE FROM children WHERE parent_id = ?').run(pid)
+      this.db.prepare('DELETE FROM auth_tokens WHERE parent_id = ?').run(pid)
+      this.db.prepare('DELETE FROM parents WHERE id = ?').run(pid)
+    })
+    tx(id)
   }
 
   async getChildrenForParent(parentId: string): Promise<ChildRecord[]> {

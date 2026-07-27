@@ -201,6 +201,26 @@ Verified end-to-end (browser): a fresh session starts child-less, the empty
 state renders, "Load demo" fills the dashboard, and typing a name in onboarding
 creates that child and lands on the audit.
 
+## Security & DPDP
+
+Hardening for real users, all verified end-to-end:
+
+- **Tokens hashed at rest** — `auth_tokens` stores `sha256(token)`, so a DB leak
+  never exposes live sessions (the raw token lives only in the client).
+- **Rate limiting** — an in-memory fixed-window limiter guards the auth
+  endpoints (session mint, login start/verify) against brute-force and spam;
+  swap for Redis when multi-instance.
+- **WhatsApp webhook signature** — `/api/whatsapp/inbound` verifies Meta's
+  `X-Hub-Signature-256` HMAC (raw body captured for it) when
+  `WHATSAPP_APP_SECRET` is set; skipped in dev/mock.
+- **DPDP export + delete** — `GET /api/me/export` downloads *all* of an account's
+  data as JSON; `DELETE /api/me` (`store.deleteParent`) permanently cascades away
+  the parent, every child's answers/sessions/exams/predictions, and all tokens.
+  Wired to the You screen's Export/Delete buttons. Verified: after delete the DB
+  has zero rows for that account and the token 401s.
+- CORS locked to `CORS_ORIGIN` in production; `x-powered-by` off; `trust proxy`
+  on for correct client IPs behind Render/Cloudflare.
+
 ## Guest-first — experience before login
 
 No sign-up to begin. A parent runs the whole audit — take a test, get the
@@ -270,8 +290,9 @@ chrome on the real screens.
   is first-class on both form factors.
 - **WhatsApp OTP delivery** — cross-device login works; wiring an `auth_code`
   WhatsApp template makes the code actually arrive in production (mock returns it
-  today). Then wire the DPDP consent/export/delete actions and a multi-child
-  switcher (`getChildrenForParent` already returns all of them).
+  today).
+- **Multi-child switcher** — `getChildrenForParent` already returns all of them;
+  add the UI to switch/add beyond the first child.
 - **Payments** (Razorpay/UPI) to make the paywall real.
 - **Aggregate accuracy** — publish the cross-cohort "within ±8% for X% of
   children" stat (per-child track record is live).

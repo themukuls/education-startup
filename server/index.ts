@@ -10,7 +10,8 @@ import { sendCard, hasWhatsApp } from './whatsapp.ts'
 import { pickCreds, credsFromHeaders, credsFromEnv, llmText } from './llm/index.ts'
 import { retrieve, ingest, groundingBlock, type RawDoc } from './rag/index.ts'
 import { getStore, storeKind, mintAnonAccount, seedDemoChild } from './db/index.ts'
-import { requireAuth, ownsChild, newToken } from './auth.ts'
+import { requireAuth, ownsChild, newToken, hashToken, whatsappSignatureOk } from './auth.ts'
+import { rateLimit } from './ratelimit.ts'
 import { computeReport } from '../src/engine/index.ts'
 import { predictBand, resolvePredictions, accuracyStats, calibrationFrom } from '../src/engine/accuracy.ts'
 import type { AnswerEvent } from '../src/engine/types.ts'
@@ -23,7 +24,10 @@ const app = express()
 // Vercel origin(s) — comma-separated — so only your frontend can call the API.
 const CORS_ORIGIN = process.env.CORS_ORIGIN?.trim()
 app.use(cors(CORS_ORIGIN ? { origin: CORS_ORIGIN.split(',').map((o) => o.trim()) } : {}))
-app.use(express.json({ limit: '256kb' }))
+// capture the raw body so the WhatsApp webhook HMAC can be verified
+app.use(express.json({ limit: '256kb', verify: (req, _res, buf) => void ((req as unknown as { rawBody?: Buffer }).rawBody = buf) }))
+app.disable('x-powered-by')
+app.set('trust proxy', 1)
 
 const PORT = Number(process.env.PORT ?? 8787)
 
@@ -135,12 +139,12 @@ app.post('/api/llm/test', async (req, res) => {
 
 // Mint a fresh anonymous account (own parent + own seeded demo child) and return
 // a bearer token. The client calls this once and stores the token.
-app.post('/api/auth/session', async (_req, res) => {
+app.post('/api/auth/session', rateLimit({ windowMs: 10 * 60_000, max: 40, name: 'session' }), async (_req, res) => {
   try {
     const store = await getStore()
     const { parentId } = await mintAnonAccount(store)
     const token = newToken()
-    await store.createToken(token, parentId)
+    await store.createToken(hashToken(token), parentId)
     res.json({ token })
   } catch (err) {
     console.error('[auth/session] failed:', err)
@@ -153,7 +157,7 @@ app.post('/api/auth/session', async (_req, res) => {
 // account's WhatsApp number; entering it mints a fresh token bound to that same
 // parent. Mock-safe: without WhatsApp creds the code is returned as `devCode` so
 // the flow is testable; with creds it is delivered and never returned.
-app.post('/api/auth/login/start', async (req, res) => {
+app.post('/api/auth/login/start', rateLimit({ windowMs: 10 * 60_000, max: 6, name: 'login-start' }), async (req, res) => {
   const phone = normalizePhone(String((req.body ?? {}).phone ?? ''))
   if (phone.length < 8) return res.status(400).json({ error: 'valid phone required' })
   try {
@@ -175,7 +179,7 @@ app.post('/api/auth/login/start', async (req, res) => {
   }
 })
 
-app.post('/api/auth/login/verify', async (req, res) => {
+app.post('/api/auth/login/verify', rateLimit({ windowMs: 10 * 60_000, max: 12, name: 'login-verify' }), async (req, res) => {
   const b = req.body ?? {}
   const phone = normalizePhone(String(b.phone ?? ''))
   const code = String(b.code ?? '').trim()
@@ -199,7 +203,7 @@ app.post('/api/auth/login/verify', async (req, res) => {
     const parent = await store.getParentByPhone(phone)
     if (!parent) return res.status(400).json({ error: 'account not found' })
     const token = newToken()
-    await store.createToken(token, parent.id)
+    await store.createToken(hashToken(token), parent.id)
     await store.clearLoginCode(phone)
     res.json({ token })
   } catch (err) {
@@ -241,6 +245,35 @@ app.post('/api/children', requireAuth, async (req, res) => {
   } catch (err) {
     console.error('[children] failed:', err)
     res.status(500).json({ error: 'could not add child' })
+  }
+})
+
+// ---- DPDP: export + permanently delete all of this account's data -----------
+app.get('/api/me/export', requireAuth, async (_req, res) => {
+  const store = await getStore()
+  const parentId = res.locals.parentId
+  const parent = await store.getParent(parentId)
+  const children = await store.getChildrenForParent(parentId)
+  const now = Date.now()
+  const childData = await Promise.all(
+    children.map(async (c) => ({
+      child: c,
+      events: await store.getEngineInput(c.id, now),
+      predictions: await store.getPredictions(c.id),
+      exams: await store.getExamResults(c.id),
+    })),
+  )
+  res.setHeader('Content-Disposition', 'attachment; filename="parentproof-export.json"')
+  res.json({ exportedAt: now, parent, children: childData })
+})
+
+app.delete('/api/me', requireAuth, async (_req, res) => {
+  try {
+    await (await getStore()).deleteParent(res.locals.parentId)
+    res.json({ ok: true })
+  } catch (err) {
+    console.error('[me/delete] failed:', err)
+    res.status(500).json({ error: 'delete failed' })
   }
 })
 
@@ -365,6 +398,7 @@ app.post('/api/account', requireAuth, async (req, res) => {
 // session — we claim the account and never send an OTP. Mock-safe: with no
 // credentials this still records the parent so the flow is exercisable locally.
 app.post('/api/whatsapp/inbound', async (req, res) => {
+  if (!whatsappSignatureOk(req)) return res.status(401).json({ error: 'invalid signature' })
   const b = req.body ?? {}
   // shape mirrors the Cloud API payload we care about (flattened for the demo)
   const from = normalizePhone(String(b.from ?? b.wa_id ?? ''))

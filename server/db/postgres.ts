@@ -124,6 +124,28 @@ export class PostgresStore implements Store {
     return this.rowToParent(rows[0])
   }
 
+  async deleteParent(id: string): Promise<void> {
+    const client = await this.pool.connect()
+    try {
+      await client.query('BEGIN')
+      const kids = 'SELECT id FROM children WHERE parent_id = $1'
+      await client.query(`DELETE FROM answers WHERE child_id IN (${kids})`, [id])
+      await client.query(`DELETE FROM sessions WHERE child_id IN (${kids})`, [id])
+      await client.query(`DELETE FROM exams WHERE child_id IN (${kids})`, [id])
+      await client.query(`DELETE FROM predictions WHERE child_id IN (${kids})`, [id])
+      await client.query('DELETE FROM login_codes WHERE phone = (SELECT phone FROM parents WHERE id = $1)', [id])
+      await client.query('DELETE FROM children WHERE parent_id = $1', [id])
+      await client.query('DELETE FROM auth_tokens WHERE parent_id = $1', [id])
+      await client.query('DELETE FROM parents WHERE id = $1', [id])
+      await client.query('COMMIT')
+    } catch (err) {
+      await client.query('ROLLBACK')
+      throw err
+    } finally {
+      client.release()
+    }
+  }
+
   async getChildrenForParent(parentId: string): Promise<ChildRecord[]> {
     const { rows } = await this.pool.query('SELECT * FROM children WHERE parent_id = $1 ORDER BY created_at', [parentId])
     return rows.map((r) => ({

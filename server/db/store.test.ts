@@ -92,4 +92,24 @@ describe('SqliteStore', () => {
     expect(await s.getLoginCode('919876543210')).toBeNull()
     await s.close()
   })
+
+  it('deleteParent cascades away all children data + tokens (DPDP)', async () => {
+    const s = await mk()
+    await s.createParent({ id: 'p1', name: 'Priya', phone: '919000000001', claimed: true })
+    await s.createToken('h1', 'p1')
+    await s.upsertChild({ id: 'k1', parentId: 'p1', name: 'A', board: 'CBSE', klass: 10, subjects: [], monthlySpend: 0 })
+    await s.addAnswers([
+      { childId: 'k1', itemId: 'i', chapter: 'X', cogLevel: 'R', format: 'MCQ', itemDifficulty: 0.5, correct: true, responseTimeSec: 20, answerChanged: false, skipped: false, sessionId: 's', timestamp: 1, position: 1 },
+    ])
+    await s.addExamResult({ childId: 'k1', subject: 'Maths', examType: 'school_ut', marks: 60, date: 1 })
+
+    await s.deleteParent('p1')
+
+    expect(await s.getParent('p1')).toBeNull()
+    expect(await s.parentIdForToken('h1')).toBeNull()
+    expect(await s.getChildrenForParent('p1')).toHaveLength(0)
+    expect((await s.getEngineInput('k1', 5)).answers).toHaveLength(0)
+    expect(await s.getExamResults('k1')).toHaveLength(0)
+    await s.close()
+  })
 })

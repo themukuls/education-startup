@@ -20,6 +20,15 @@ function setToken(t: string): void {
   }
 }
 
+/** Wipe all local session state (used after account deletion). */
+export function clearSession(): void {
+  try {
+    ;['pp.token', 'pp.status', 'pp.name', 'pp.phone', 'pp.channel'].forEach((k) => localStorage.removeItem(k))
+  } catch {
+    /* ignore */
+  }
+}
+
 export function authHeaders(): Record<string, string> {
   const t = getToken()
   return t ? { authorization: `Bearer ${t}` } : {}
@@ -99,4 +108,28 @@ export async function verifyLogin(phone: string, code: string): Promise<void> {
   }
   const d = (await res.json()) as { token: string }
   setToken(d.token)
+}
+
+// ---- DPDP: export + delete all of this account's data ----
+
+/** Download all of this account's data as a JSON file. */
+export async function exportMyData(): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/me/export`, { headers: { ...authHeaders() }, signal: AbortSignal.timeout(20_000) })
+  if (!res.ok) throw new Error(`export ${res.status}`)
+  const blob = await res.blob()
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'parentproof-export.json'
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
+}
+
+/** Permanently delete this account + all children data, then clear the session. */
+export async function deleteMyAccount(): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/me`, { method: 'DELETE', headers: { ...authHeaders() }, signal: AbortSignal.timeout(15_000) })
+  if (!res.ok) throw new Error(`delete ${res.status}`)
+  clearSession()
 }

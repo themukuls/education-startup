@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import AppShell from '../components/AppShell'
 import { useApp } from '../state/AppContext'
+import { exportMyData, deleteMyAccount } from '../api/auth'
 import { c, serif } from '../theme'
 
 // Screen 13 — You & your children (control). Parent-as-owner + DPDP consent + add-child.
@@ -66,8 +67,33 @@ export default function You() {
           Verified for {child.name} (minor). You can export or permanently delete his data at any time.
         </p>
         <div style={{ display: 'flex', gap: 9 }}>
-          <button onClick={() => alert('Exporting ' + child.name + '’s data…')} style={{ flex: 1, textAlign: 'center', background: c.home, border: 'none', borderRadius: 11, padding: 9, fontSize: 12.5, fontWeight: 800, color: c.ink2 }}>Export data</button>
-          <button onClick={() => alert('This permanently deletes all of ' + child.name + '’s data.')} style={{ flex: 1, textAlign: 'center', background: c.redWash, border: 'none', borderRadius: 11, padding: 9, fontSize: 12.5, fontWeight: 800, color: c.red }}>Delete data</button>
+          <button
+            onClick={async () => {
+              try {
+                await exportMyData()
+              } catch {
+                alert('Could not export right now. Please try again.')
+              }
+            }}
+            style={{ flex: 1, textAlign: 'center', background: c.home, border: 'none', borderRadius: 11, padding: 9, fontSize: 12.5, fontWeight: 800, color: c.ink2 }}
+          >
+            Export data
+          </button>
+          <button
+            onClick={async () => {
+              if (!window.confirm('This permanently deletes your account and ALL of your children’s data. This cannot be undone. Continue?')) return
+              try {
+                await deleteMyAccount()
+                window.location.assign('#/')
+                window.location.reload()
+              } catch {
+                alert('Could not delete right now. Please try again.')
+              }
+            }}
+            style={{ flex: 1, textAlign: 'center', background: c.redWash, border: 'none', borderRadius: 11, padding: 9, fontSize: 12.5, fontWeight: 800, color: c.red }}
+          >
+            Delete data
+          </button>
         </div>
       </div>
 
