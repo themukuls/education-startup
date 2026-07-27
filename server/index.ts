@@ -3,7 +3,7 @@
 
 import express from 'express'
 import cors from 'cors'
-import { randomUUID } from 'node:crypto'
+import { randomUUID, randomInt } from 'node:crypto'
 import { generateTest } from './generate.ts'
 import { renderCard } from './render.ts'
 import { sendCard, hasWhatsApp } from './whatsapp.ts'
@@ -129,6 +129,66 @@ app.post('/api/auth/session', async (_req, res) => {
   }
 })
 
+// ---- Cross-device login: WhatsApp-delivered one-time code --------------------
+// Resume a CLAIMED account on a new device. We send a 6-digit code to the
+// account's WhatsApp number; entering it mints a fresh token bound to that same
+// parent. Mock-safe: without WhatsApp creds the code is returned as `devCode` so
+// the flow is testable; with creds it is delivered and never returned.
+app.post('/api/auth/login/start', async (req, res) => {
+  const phone = normalizePhone(String((req.body ?? {}).phone ?? ''))
+  if (phone.length < 8) return res.status(400).json({ error: 'valid phone required' })
+  try {
+    const store = await getStore()
+    const parent = await store.getParentByPhone(phone)
+    if (!parent) {
+      // don't reveal which numbers exist; just report "sent"
+      return res.json({ ok: true })
+    }
+    const code = String(randomInt(0, 1_000_000)).padStart(6, '0')
+    await store.putLoginCode(phone, code, Date.now() + 10 * 60 * 1000)
+    // Delivery: a business-initiated OTP needs a pre-approved WhatsApp template
+    // (TODO: add an `auth_code` template + send here when WHATSAPP_* is set).
+    // Until then, mock mode returns the code so the flow is fully testable.
+    res.json({ ok: true, ...(hasWhatsApp() ? {} : { devCode: code }) })
+  } catch (err) {
+    console.error('[login/start] failed:', err)
+    res.status(500).json({ error: 'could not start login' })
+  }
+})
+
+app.post('/api/auth/login/verify', async (req, res) => {
+  const b = req.body ?? {}
+  const phone = normalizePhone(String(b.phone ?? ''))
+  const code = String(b.code ?? '').trim()
+  if (!phone || !code) return res.status(400).json({ error: 'phone and code required' })
+  try {
+    const store = await getStore()
+    const rec = await store.getLoginCode(phone)
+    if (!rec) return res.status(400).json({ error: 'no code — request a new one' })
+    if (Date.now() > rec.expiresAt) {
+      await store.clearLoginCode(phone)
+      return res.status(400).json({ error: 'code expired' })
+    }
+    if (rec.attempts >= 5) {
+      await store.clearLoginCode(phone)
+      return res.status(429).json({ error: 'too many attempts' })
+    }
+    if (rec.code !== code) {
+      await store.incLoginAttempt(phone)
+      return res.status(400).json({ error: 'wrong code' })
+    }
+    const parent = await store.getParentByPhone(phone)
+    if (!parent) return res.status(400).json({ error: 'account not found' })
+    const token = newToken()
+    await store.createToken(token, parent.id)
+    await store.clearLoginCode(phone)
+    res.json({ token })
+  } catch (err) {
+    console.error('[login/verify] failed:', err)
+    res.status(500).json({ error: 'could not verify' })
+  }
+})
+
 // The authenticated parent + the children they own.
 app.get('/api/me', requireAuth, async (_req, res) => {
   const store = await getStore()
@@ -230,7 +290,8 @@ app.post('/api/sessions', requireAuth, async (req, res) => {
 app.post('/api/account', requireAuth, async (req, res) => {
   const b = req.body ?? {}
   const name = String(b.name ?? 'Parent').trim() || 'Parent'
-  const phone = String(b.phone ?? '').trim()
+  // Store digits-only so phone lookups (cross-device login, WhatsApp inbound) match.
+  const phone = normalizePhone(String(b.phone ?? ''))
   const channel = b.channel === 'whatsapp' ? 'whatsapp' : 'manual'
   try {
     // upgrade THIS authenticated parent from anonymous to claimed. A WhatsApp

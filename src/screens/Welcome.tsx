@@ -11,7 +11,7 @@ import { c, serif } from '../theme'
 // works, pricing, CTA). Value before data capture — no sign-up to begin.
 export default function Welcome() {
   const nav = useNavigate()
-  const { child, openSaveGate } = useApp()
+  const { child } = useApp()
   const isDesktop = useIsDesktop()
   const start = () => nav('/onboarding/child')
 
@@ -25,7 +25,7 @@ export default function Welcome() {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: isDesktop ? 22 : 12 }}>
           {isDesktop && (
-            <span onClick={openSaveGate} style={{ color: c.ink2, fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
+            <span onClick={() => nav('/login')} style={{ color: c.ink2, fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
               Sign in
             </span>
           )}
@@ -110,7 +110,7 @@ export default function Welcome() {
             <button onClick={start} style={{ ...heroCta, width: '100%', background: c.amber, color: c.navy }}>
               Start {child.name || 'your child'}&apos;s free audit
             </button>
-            <button onClick={openSaveGate} style={{ width: '100%', background: 'rgba(255,255,255,.12)', color: '#fff', border: '1px solid rgba(255,255,255,.3)', borderRadius: 14, padding: 15, fontSize: 15, fontWeight: 800, fontFamily: 'inherit' }}>
+            <button onClick={() => nav('/login')} style={{ width: '100%', background: 'rgba(255,255,255,.12)', color: '#fff', border: '1px solid rgba(255,255,255,.3)', borderRadius: 14, padding: 15, fontSize: 15, fontWeight: 800, fontFamily: 'inherit' }}>
               I already have an audit
             </button>
           </div>

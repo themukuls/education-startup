@@ -21,6 +21,9 @@ CREATE TABLE IF NOT EXISTS auth_tokens (
   token TEXT PRIMARY KEY, parent_id TEXT NOT NULL, created_at DOUBLE PRECISION, last_seen DOUBLE PRECISION
 );
 CREATE INDEX IF NOT EXISTS idx_tokens_parent ON auth_tokens(parent_id);
+CREATE TABLE IF NOT EXISTS login_codes (
+  phone TEXT PRIMARY KEY, code TEXT NOT NULL, expires_at DOUBLE PRECISION, attempts INTEGER, created_at DOUBLE PRECISION
+);
 CREATE TABLE IF NOT EXISTS children (
   id TEXT PRIMARY KEY, parent_id TEXT, name TEXT NOT NULL, board TEXT, klass INTEGER,
   subjects TEXT, monthly_spend INTEGER, created_at DOUBLE PRECISION
@@ -143,6 +146,28 @@ export class PostgresStore implements Store {
 
   async deleteToken(token: string): Promise<void> {
     await this.pool.query('DELETE FROM auth_tokens WHERE token = $1', [token])
+  }
+
+  async putLoginCode(phone: string, code: string, expiresAt: number): Promise<void> {
+    await this.pool.query(
+      `INSERT INTO login_codes (phone, code, expires_at, attempts, created_at) VALUES ($1, $2, $3, 0, $4)
+       ON CONFLICT (phone) DO UPDATE SET code = EXCLUDED.code, expires_at = EXCLUDED.expires_at, attempts = 0, created_at = EXCLUDED.created_at`,
+      [phone, code, expiresAt, Date.now()],
+    )
+  }
+
+  async getLoginCode(phone: string): Promise<{ code: string; expiresAt: number; attempts: number } | null> {
+    const { rows } = await this.pool.query('SELECT code, expires_at, attempts FROM login_codes WHERE phone = $1', [phone])
+    const r = rows[0]
+    return r ? { code: r.code, expiresAt: r.expires_at, attempts: r.attempts ?? 0 } : null
+  }
+
+  async incLoginAttempt(phone: string): Promise<void> {
+    await this.pool.query('UPDATE login_codes SET attempts = attempts + 1 WHERE phone = $1', [phone])
+  }
+
+  async clearLoginCode(phone: string): Promise<void> {
+    await this.pool.query('DELETE FROM login_codes WHERE phone = $1', [phone])
   }
 
   async upsertChild(c: ChildRecord): Promise<void> {

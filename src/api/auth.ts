@@ -69,3 +69,34 @@ export async function fetchMe(): Promise<Me> {
   if (!res.ok) throw new Error(`me ${res.status}`)
   return res.json()
 }
+
+// ---- Cross-device login (resume a claimed account on a new device) ----
+
+/** Request a one-time code sent to the account's WhatsApp. In mock mode the
+ * backend returns `devCode` so the flow is testable without WhatsApp creds. */
+export async function startLogin(phone: string): Promise<{ ok: boolean; devCode?: string }> {
+  const res = await fetch(`${API_BASE}/api/auth/login/start`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ phone }),
+    signal: AbortSignal.timeout(15_000),
+  })
+  if (!res.ok) throw new Error(`login start ${res.status}`)
+  return res.json()
+}
+
+/** Verify the code; on success the returned token replaces this device's session. */
+export async function verifyLogin(phone: string, code: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/auth/login/verify`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ phone, code }),
+    signal: AbortSignal.timeout(15_000),
+  })
+  if (!res.ok) {
+    const e = (await res.json().catch(() => ({}))) as { error?: string }
+    throw new Error(e.error || `login verify ${res.status}`)
+  }
+  const d = (await res.json()) as { token: string }
+  setToken(d.token)
+}

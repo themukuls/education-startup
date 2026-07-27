@@ -77,4 +77,19 @@ describe('SqliteStore', () => {
     expect((await s.getParentByPhone('919876543210'))?.id).toBe('p1')
     await s.close()
   })
+
+  it('stores one-time login codes with attempts + expiry', async () => {
+    const s = await mk()
+    await s.putLoginCode('919876543210', '123456', 9_999_999_999_999)
+    const rec = await s.getLoginCode('919876543210')
+    expect(rec).toMatchObject({ code: '123456', attempts: 0 })
+    await s.incLoginAttempt('919876543210')
+    expect((await s.getLoginCode('919876543210'))?.attempts).toBe(1)
+    // putting again resets attempts
+    await s.putLoginCode('919876543210', '654321', 9_999_999_999_999)
+    expect(await s.getLoginCode('919876543210')).toMatchObject({ code: '654321', attempts: 0 })
+    await s.clearLoginCode('919876543210')
+    expect(await s.getLoginCode('919876543210')).toBeNull()
+    await s.close()
+  })
 })

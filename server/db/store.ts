@@ -45,6 +45,11 @@ export interface Store {
   /** resolve a bearer token to its parent id (and bump last-seen), or null. */
   parentIdForToken(token: string): Promise<string | null>
   deleteToken(token: string): Promise<void>
+  // ---- cross-device login codes (phone → one-time code) ----
+  putLoginCode(phone: string, code: string, expiresAt: number): Promise<void>
+  getLoginCode(phone: string): Promise<{ code: string; expiresAt: number; attempts: number } | null>
+  incLoginAttempt(phone: string): Promise<void>
+  clearLoginCode(phone: string): Promise<void>
   upsertChild(c: ChildRecord): Promise<void>
   getChild(id: string): Promise<ChildRecord | null>
   addSession(s: SessionEvent): Promise<void>
@@ -69,6 +74,9 @@ CREATE TABLE IF NOT EXISTS auth_tokens (
   token TEXT PRIMARY KEY, parent_id TEXT NOT NULL, created_at INTEGER, last_seen INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_tokens_parent ON auth_tokens(parent_id);
+CREATE TABLE IF NOT EXISTS login_codes (
+  phone TEXT PRIMARY KEY, code TEXT NOT NULL, expires_at INTEGER, attempts INTEGER, created_at INTEGER
+);
 CREATE TABLE IF NOT EXISTS children (
   id TEXT PRIMARY KEY, parent_id TEXT, name TEXT NOT NULL, board TEXT, klass INTEGER,
   subjects TEXT, monthly_spend INTEGER, created_at INTEGER
@@ -203,6 +211,27 @@ export class SqliteStore implements Store {
 
   async deleteToken(token: string): Promise<void> {
     this.db.prepare('DELETE FROM auth_tokens WHERE token = ?').run(token)
+  }
+
+  async putLoginCode(phone: string, code: string, expiresAt: number): Promise<void> {
+    this.db
+      .prepare('INSERT OR REPLACE INTO login_codes (phone, code, expires_at, attempts, created_at) VALUES (?, ?, ?, 0, ?)')
+      .run(phone, code, expiresAt, Date.now())
+  }
+
+  async getLoginCode(phone: string): Promise<{ code: string; expiresAt: number; attempts: number } | null> {
+    const r = this.db.prepare('SELECT code, expires_at, attempts FROM login_codes WHERE phone = ?').get(phone) as
+      | { code: string; expires_at: number; attempts: number }
+      | undefined
+    return r ? { code: r.code, expiresAt: r.expires_at, attempts: r.attempts ?? 0 } : null
+  }
+
+  async incLoginAttempt(phone: string): Promise<void> {
+    this.db.prepare('UPDATE login_codes SET attempts = attempts + 1 WHERE phone = ?').run(phone)
+  }
+
+  async clearLoginCode(phone: string): Promise<void> {
+    this.db.prepare('DELETE FROM login_codes WHERE phone = ?').run(phone)
   }
 
   async upsertChild(c: ChildRecord): Promise<void> {

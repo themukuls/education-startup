@@ -170,6 +170,18 @@ Every browser gets its **own** account — there is no shared/global user any mo
 Verified end-to-end: two sessions get distinct tokens and isolated children;
 each reads only its own report; cross-account reads 404.
 
+- **Cross-device login.** A claimed account resumes on a new device via a
+  one-time code sent to its WhatsApp number: `POST /api/auth/login/start` (find
+  parent by verified phone → store a 6-digit code, 10-min expiry, ≤5 attempts)
+  and `POST /api/auth/login/verify` (mints a fresh token bound to that same
+  parent). The `/login` screen drives it (phone → code). Delivery uses WhatsApp
+  when configured; in mock the code is returned as `devCode` so it's testable.
+  Phones are stored digits-only so login + inbound lookups match.
+
+Verified end-to-end (curl + browser): a brand-new session logs into an existing
+claimed account and sees that account's child; codes are one-time; wrong/expired
+codes are rejected.
+
 ## Onboarding — real accounts start empty
 
 A freshly minted account has **no children** — the parent creates their own.
@@ -256,11 +268,10 @@ chrome on the real screens.
 - **Finish the responsive migration** — move the remaining screens (Tracker,
   Accuracy, You, the funnel) onto `AppShell` / responsive layouts so every route
   is first-class on both form factors.
-- **Cross-device login** — phone-verified (WhatsApp/OTP) so a claimed account
-  resumes on a new device (today identity = the token in that browser). The seam
-  is in place (`getParentByPhone`, the inbound webhook). Then wire the DPDP
-  consent/export/delete actions and a multi-child switcher (`getChildrenForParent`
-  already returns all of them).
+- **WhatsApp OTP delivery** — cross-device login works; wiring an `auth_code`
+  WhatsApp template makes the code actually arrive in production (mock returns it
+  today). Then wire the DPDP consent/export/delete actions and a multi-child
+  switcher (`getChildrenForParent` already returns all of them).
 - **Payments** (Razorpay/UPI) to make the paywall real.
 - **Aggregate accuracy** — publish the cross-cohort "within ±8% for X% of
   children" stat (per-child track record is live).
