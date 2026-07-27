@@ -4,6 +4,7 @@ import { buildStream } from '../engine/synthetic'
 import { fetchReport, postSession, type RawAnswer } from '../api/persistence'
 import { saveAccount } from '../api/account'
 import { ensureSession, fetchMe } from '../api/auth'
+import { createChild as apiCreateChild } from '../api/children'
 
 export type Goal = 'board' | 'weak-subject' | 'habit'
 export type AccountStatus = 'guest' | 'claimed'
@@ -65,6 +66,12 @@ interface AppContextValue extends AppState {
   report: LearningReport
   /** The active child's id in the store (from /api/me), or null until it loads. */
   childId: string | null
+  /** true once we know whether the account has a child (avoids empty-state flash). */
+  accountReady: boolean
+  /** Create this account's child from the onboarding form; adopts it as active. */
+  createChild: () => Promise<void>
+  /** Load the seeded demo child (for exploring), adopting it as active. */
+  loadDemo: () => Promise<void>
 
   // ---- guest-first / deferred save ----
   accountStatus: AccountStatus
@@ -85,7 +92,7 @@ interface AppContextValue extends AppState {
 }
 
 const defaultChild: Child = {
-  name: 'Mukul',
+  name: '',
   board: 'CBSE',
   klass: 10,
   subjects: ['Maths', 'Science'],
@@ -113,6 +120,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [lastScore, setLastScore] = useState<number | null>(null)
   const [answered, setAnswered] = useState(0)
   const [childId, setChildId] = useState<string | null>(null)
+  const [accountReady, setAccountReady] = useState(false)
 
   // Report state. Initialised synchronously with the synthetic stream so the UI
   // renders instantly and still works offline, then replaced by the child's
@@ -147,8 +155,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
           const r = await fetchReport(first.id)
           if (alive) setReport(r)
         }
+        if (alive) setAccountReady(true)
       } catch {
         /* backend unavailable — keep the synthetic fallback + guest defaults */
+        if (alive) setAccountReady(true)
       }
     })()
     return () => {
@@ -171,9 +181,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
       answered,
       report,
       childId,
+      accountReady,
       setParentName,
       setGoal,
       setChild: (patch) => setChildState((prev) => ({ ...prev, ...patch })),
+      createChild: async () => {
+        const c = await apiCreateChild(
+          { name: child.name.trim() || 'My child', board: child.board, klass: child.klass, subjects: child.subjects, monthlySpend: child.monthlySpend },
+          false,
+        )
+        setChildId(c.id)
+        setChildState({ name: c.name, board: c.board, klass: c.klass, subjects: c.subjects, monthlySpend: c.monthlySpend })
+        try {
+          setReport(await fetchReport(c.id))
+        } catch {
+          /* fresh child has no history yet — keep placeholder until first test */
+        }
+      },
+      loadDemo: async () => {
+        const c = await apiCreateChild(
+          { name: 'Mukul', board: 'CBSE', klass: 10, subjects: ['Maths', 'Science'], monthlySpend: 5000 },
+          true,
+        )
+        setChildId(c.id)
+        setChildState({ name: c.name, board: c.board, klass: c.klass, subjects: c.subjects, monthlySpend: c.monthlySpend })
+        setReport(await fetchReport(c.id))
+      },
       recordTest: (score, ans) => {
         setLastScore(score)
         setAnswered(ans)
@@ -229,6 +262,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     answered,
     report,
     childId,
+    accountReady,
   ])
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>

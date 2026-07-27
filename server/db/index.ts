@@ -49,12 +49,10 @@ export async function seedDemoChild(s: Store, parentId: string, childId: string,
   }
 }
 
-/** Mint a fresh anonymous account with its own seeded demo child. */
-export async function mintAnonAccount(s: Store): Promise<{ parentId: string; childId: string }> {
+/** Mint a fresh anonymous account. It starts EMPTY — the parent creates their
+ * own child in onboarding (or loads demo data on demand). No global/shared user. */
+export async function mintAnonAccount(s: Store): Promise<{ parentId: string }> {
   const parentId = `p_${randomUUID()}`
-  const childId = `c_${randomUUID()}`
   await s.createParent({ id: parentId, name: '', phone: '', channel: 'manual', claimed: false })
-  await seedDemoChild(s, parentId, childId)
-  console.log(`[db] minted anon account ${parentId} with demo child ${childId} (${storeKind})`)
-  return { parentId, childId }
+  return { parentId }
 }

@@ -166,12 +166,28 @@ Every browser gets its **own** account — there is no shared/global user any mo
 - **Guest → claimed on the real account.** `POST /api/account` upgrades *this*
   authenticated (anonymous) parent to claimed with name + phone; the WhatsApp
   inbound webhook find-or-creates a parent by verified phone.
-- **Per-account demo seed.** A freshly minted account is seeded with its own
-  isolated demo child so the app stays full while onboarding is built — replaced
-  by parent-created children (`POST /api/children`) later.
 
 Verified end-to-end: two sessions get distinct tokens and isolated children;
 each reads only its own report; cross-account reads 404.
+
+## Onboarding — real accounts start empty
+
+A freshly minted account has **no children** — the parent creates their own.
+
+- The funnel (`Welcome → OnboardChild → OnboardGoal → audit → test → Diagnosis →
+  Home`) creates a real child at the commit point: `OnboardGoal` calls
+  `createChild()` → `POST /api/children`, which becomes the active `childId`.
+  The kid test then posts real events against it (`recordSession`), so `Home`
+  fills with that child's own data — no synthetic stand-in.
+- **First-run empty state.** With no child yet, `Home` shows a "Let's audit your
+  child's learning" prompt (Start the free audit) plus a **"Load demo data"**
+  escape hatch (`POST /api/children` with `seedDemo`) so the rich demo history is
+  one tap away for exploring.
+- The old global auto-seed is gone; `seedDemoChild` is now on-demand only.
+
+Verified end-to-end (browser): a fresh session starts child-less, the empty
+state renders, "Load demo" fills the dashboard, and typing a name in onboarding
+creates that child and lands on the audit.
 
 ## Guest-first — experience before login
 
@@ -238,11 +254,11 @@ chrome on the real screens.
 - **Finish the responsive migration** — move the remaining screens (Tracker,
   Accuracy, You, the funnel) onto `AppShell` / responsive layouts so every route
   is first-class on both form factors.
-- **Onboarding + cross-device login** — replace the auto-seeded demo child with
-  a real add-child flow (`POST /api/children` + empty states), and add
-  phone-verified login (WhatsApp/OTP) so a claimed account resumes on a new
-  device. Token auth + ownership are already in place; wire the DPDP
-  consent/export/delete actions on top.
+- **Cross-device login** — phone-verified (WhatsApp/OTP) so a claimed account
+  resumes on a new device (today identity = the token in that browser). The seam
+  is in place (`getParentByPhone`, the inbound webhook). Then wire the DPDP
+  consent/export/delete actions and a multi-child switcher (`getChildrenForParent`
+  already returns all of them).
 - **Payments** (Razorpay/UPI) to make the paywall real.
 - **Aggregate accuracy** — publish the cross-cohort "within ±8% for X% of
   children" stat (per-child track record is live).

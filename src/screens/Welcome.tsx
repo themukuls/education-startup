@@ -53,14 +53,14 @@ export default function Welcome() {
             </p>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center' }}>
               <button onClick={start} style={heroCta}>
-                Start {child.name}&apos;s free 7-day audit
+                Start {child.name || 'your child'}&apos;s free 7-day audit
               </button>
               <span style={{ fontSize: 13, color: c.ink3, fontWeight: 600 }}>No sign-up needed · 3 free tests</span>
             </div>
           </div>
 
           {/* sample diagnosis card visual */}
-          <SampleCard isDesktop={isDesktop} childName={child.name} />
+          <SampleCard isDesktop={isDesktop} childName={child.name || 'Aarav'} />
         </div>
       </section>
 
@@ -108,7 +108,7 @@ export default function Welcome() {
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <button onClick={start} style={{ ...heroCta, width: '100%', background: c.amber, color: c.navy }}>
-              Start {child.name}&apos;s free audit
+              Start {child.name || 'your child'}&apos;s free audit
             </button>
             <button onClick={openSaveGate} style={{ width: '100%', background: 'rgba(255,255,255,.12)', color: '#fff', border: '1px solid rgba(255,255,255,.3)', borderRadius: 14, padding: 15, fontSize: 15, fontWeight: 800, fontFamily: 'inherit' }}>
               I already have an audit

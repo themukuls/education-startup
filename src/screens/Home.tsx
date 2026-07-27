@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import AppShell from '../components/AppShell'
 import { useApp } from '../state/AppContext'
@@ -8,11 +9,50 @@ import { c, serif } from '../theme'
 // laptop/desktop (hero + continue on the left, the smaller tiles on the right).
 export default function Home() {
   const nav = useNavigate()
-  const { parentName, child, streak, report, accountStatus, openSaveGate } = useApp()
+  const { parentName, child, streak, report, accountStatus, openSaveGate, childId, accountReady, loadDemo } = useApp()
   const isDesktop = useIsDesktop()
+  const [loadingDemo, setLoadingDemo] = useState(false)
   const keepRecord = () => (accountStatus === 'guest' ? openSaveGate() : nav('/upgrade'))
   const readiness = report.readinessPct
   const weeklyDelta = Math.max(1, Math.round(report.velocityPtsPerWeek ?? 0))
+
+  // First run: the account has no child yet → onboard, or load demo data.
+  if (accountReady && !childId) {
+    const startDemo = async () => {
+      if (loadingDemo) return
+      setLoadingDemo(true)
+      try {
+        await loadDemo()
+      } catch {
+        setLoadingDemo(false)
+      }
+    }
+    return (
+      <AppShell active="home">
+        <div style={{ maxWidth: 560, margin: '0 auto', padding: isDesktop ? '40px 0' : '24px 0', textAlign: 'center' }}>
+          <div style={{ fontSize: 44, marginBottom: 8 }}>🎓</div>
+          <h2 style={{ fontFamily: serif, fontWeight: 600, fontSize: isDesktop ? 34 : 27, lineHeight: 1.1, margin: '0 0 10px' }}>
+            Let&apos;s audit your child&apos;s learning
+          </h2>
+          <p style={{ fontSize: 15.5, color: c.ink2, fontWeight: 500, lineHeight: 1.55, margin: '0 auto 26px', maxWidth: 420 }}>
+            Create their profile and run a 15-minute audit. You&apos;ll see exactly what they&apos;ve truly
+            understood versus only memorised — and a plan to fix the gap.
+          </p>
+          <button
+            onClick={() => nav('/onboarding/child')}
+            style={{ width: '100%', maxWidth: 340, background: c.blue, color: '#fff', border: 'none', borderRadius: 16, padding: 18, fontSize: 16.5, fontWeight: 800, fontFamily: 'inherit', boxShadow: '0 12px 26px -12px rgba(35,84,199,.7)' }}
+          >
+            Start the free audit →
+          </button>
+          <div style={{ marginTop: 16 }}>
+            <button onClick={startDemo} disabled={loadingDemo} style={{ background: 'none', border: 'none', color: c.ink3, fontSize: 13.5, fontWeight: 700, fontFamily: 'inherit' }}>
+              {loadingDemo ? 'Loading demo…' : 'Just exploring? Load demo data'}
+            </button>
+          </div>
+        </div>
+      </AppShell>
+    )
+  }
 
   const hero = (
     <div style={{ background: 'linear-gradient(135deg,#2354C7,#163A8F)', borderRadius: 22, padding: isDesktop ? '26px 28px' : '20px 22px', color: '#EBEFFB', position: 'relative', overflow: 'hidden' }}>
