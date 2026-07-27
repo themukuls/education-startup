@@ -239,15 +239,17 @@ chrome on the real screens.
   two-column hero with a sample Diagnosis Card, the 55%/ASER proof band, a
   three-step "how it works", and a pricing CTA) and a clean stacked pitch on
   phones.
-- `Home` is a two-column **dashboard** on desktop (hero + continue-fix on the
-  left, the smaller tiles on the right) and a single column on phones.
+- The whole **logged-in product** is now on `AppShell`: `Home` (two-column
+  dashboard), `Tracker`, `Accuracy`, and `You` — one consistent sidebar on
+  desktop / bottom nav on phone, no bezel. Content screens use a centred
+  max-width column so wide screens stay readable.
 - `SaveGate` adapts too: a centred **modal** on desktop, a **bottom sheet** on
   phone.
-- `PhoneFrame` (the bezel look) now only wraps the screens not yet migrated —
-  it carries its own centring stage, so migrated full-bleed screens and legacy
-  framed screens coexist during the rollout. **Still on `PhoneFrame` / next to
-  migrate:** Tracker, Accuracy, You, Diagnosis, FixPlan, TermAudit, Milestone,
-  Upgrade, and the onboarding + kid-test funnel.
+- `PhoneFrame` (the bezel look) now only wraps the **funnel/one-off** screens not
+  yet migrated — it carries its own centring stage, so migrated full-bleed
+  screens and legacy framed screens coexist. **Still on `PhoneFrame`:** the
+  onboarding + kid-test funnel, Diagnosis, FixPlan, TermAudit, Milestone,
+  Upgrade, DevLlm.
 
 ## What's next
 

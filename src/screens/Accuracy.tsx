@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
-import PhoneFrame from '../components/PhoneFrame'
-import BottomNav from '../components/BottomNav'
+import AppShell from '../components/AppShell'
 import { useApp } from '../state/AppContext'
 import { fetchAccuracy, enterMarks, type AccuracyPayload } from '../api/accuracy'
 import { c, serif } from '../theme'
@@ -53,7 +52,8 @@ export default function Accuracy() {
   const hasRecord = !!stats && stats.n > 0
 
   return (
-    <PhoneFrame bg={c.home} time="7:38" contentStyle={{ padding: '16px 20px 86px', color: c.ink }} footer={<BottomNav active="progress" />}>
+    <AppShell active="accuracy">
+     <div style={{ maxWidth: 720, margin: '0 auto', color: c.ink }}>
       <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', color: c.amberDeep, marginBottom: 4 }}>
         The trust ritual
       </div>
@@ -176,7 +176,8 @@ export default function Accuracy() {
           We compare it to the prediction we already made — and show you if we were wrong.
         </p>
       </div>
-    </PhoneFrame>
+     </div>
+    </AppShell>
   )
 }
 

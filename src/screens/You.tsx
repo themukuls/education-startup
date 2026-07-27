@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import PhoneFrame from '../components/PhoneFrame'
-import BottomNav from '../components/BottomNav'
+import AppShell from '../components/AppShell'
 import { useApp } from '../state/AppContext'
 import { c, serif } from '../theme'
 
@@ -14,12 +13,8 @@ export default function You() {
   const isGuest = accountStatus === 'guest'
 
   return (
-    <PhoneFrame
-      bg={c.home}
-      time="7:42"
-      contentStyle={{ padding: '18px 22px 86px', color: c.ink }}
-      footer={<BottomNav active="you" />}
-    >
+    <AppShell active="you">
+     <div style={{ maxWidth: 640, margin: '0 auto', color: c.ink }}>
       <h2 style={{ fontFamily: serif, fontWeight: 600, fontSize: 27, lineHeight: 1.1, margin: '0 0 16px' }}>You &amp; your children</h2>
 
       {/* account owner */}
@@ -102,10 +97,11 @@ export default function You() {
         <span style={{ fontSize: 12.5, fontWeight: 700, color: c.blue }}>Test with your key ›</span>
       </button>
 
-      <button onClick={() => nav('/')} style={{ background: 'none', border: 'none', color: c.ink3, fontSize: 13.5, fontWeight: 700, marginTop: 14, textAlign: 'center' }}>
+      <button onClick={() => nav('/')} style={{ background: 'none', border: 'none', color: c.ink3, fontSize: 13.5, fontWeight: 700, margin: '14px 0 0', width: '100%', textAlign: 'center' }}>
         Sign out
       </button>
-    </PhoneFrame>
+     </div>
+    </AppShell>
   )
 }
 
