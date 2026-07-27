@@ -47,3 +47,16 @@ export function waShareLink(message: string, phone?: string): string {
   const base = digits ? `https://wa.me/${digits}` : 'https://wa.me/'
   return `${base}?text=${encodeURIComponent(message)}`
 }
+
+/**
+ * "Log in with WhatsApp" deep link. Opens the parent's own WhatsApp composing a
+ * message to our Business number. Because the phone's WhatsApp is already
+ * verified, *sending* it identifies the parent by their verified wa_id — so no
+ * OTP is needed on the phone. `code` correlates the inbound message back to this
+ * guest session; our inbound webhook resolves it and claims the account.
+ * With no business number configured, falls back to the composer.
+ */
+export function waAccountLink(businessNumber: string, childName: string, code: string): string {
+  const msg = `Hi ParentProof 👋 Save my progress — send ${childName}'s reports here. [${code}]`
+  return waShareLink(msg, businessNumber)
+}

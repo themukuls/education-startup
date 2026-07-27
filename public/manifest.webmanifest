@@ -1,0 +1,25 @@
+{
+  "name": "ParentProof",
+  "short_name": "ParentProof",
+  "description": "The independent learning-audit app for Indian parents.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#E7E0D4",
+  "theme_color": "#2354C7",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-maskable.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

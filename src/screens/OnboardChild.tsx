@@ -50,6 +50,8 @@ export default function OnboardChild() {
       <input
         value={child.name}
         onChange={(e) => setChild({ name: e.target.value })}
+        placeholder="e.g. Aarav"
+        autoFocus
         style={{
           border: `1.5px solid ${c.blue}`,
           borderRadius: 14,
@@ -132,7 +134,11 @@ export default function OnboardChild() {
         </div>
       </div>
 
-      <Btn style={{ marginTop: 16, fontWeight: 700 }} onClick={() => nav('/onboarding/goal')}>
+      <Btn
+        style={{ marginTop: 16, fontWeight: 700, opacity: child.name.trim() ? 1 : 0.45 }}
+        disabled={!child.name.trim()}
+        onClick={() => nav('/onboarding/goal')}
+      >
         Continue →
       </Btn>
     </PhoneFrame>

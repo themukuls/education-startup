@@ -5,10 +5,35 @@ import { Btn } from '../components/ui'
 import { useApp } from '../state/AppContext'
 import { c, serif } from '../theme'
 
-// Screen 09 — The Fix (prescription). Incomplete-task pull + scripted parent agency.
+// Screen 09 — The Fix (prescription). Driven by the engine's chosen insight
+// (report.headline) with a weakest-chapter fallback; no hardcoded metrics.
 export default function FixPlan() {
   const nav = useNavigate()
-  const { child } = useApp()
+  const { child, report } = useApp()
+
+  const weakest = report.chapters[0] ?? null
+  const hasChapter = weakest != null
+  const pct = weakest ? Math.round(weakest.readiness * 100) : 0
+  const headline = report.headline
+
+  // The gap title + explanation come from the engine's insight when it picked
+  // one; otherwise we derive gentle copy from the weakest chapter.
+  const gapTitle = headline?.headline ?? (weakest ? weakest.chapter : 'Run a test to get the first fix')
+  const gapDetail =
+    headline?.detail ??
+    (weakest
+      ? `${weakest.chapter} is ${child.name}'s weakest chapter right now — sitting at ${pct}% ready. Close this one first for the fastest lift.`
+      : `Run ${child.name}'s first test and we'll turn the weakest chapter into a step-by-step fix right here.`)
+
+  const actionTonight =
+    headline?.actionTonight ??
+    (weakest
+      ? `Ask ${child.name} to walk you through one ${weakest.chapter} problem out loud — listen for where the setup breaks.`
+      : `Kick off a quick test so we can pinpoint the first thing worth fixing.`)
+
+  const ourSide = weakest
+    ? `We'll build ${child.name} a short practice set on ${weakest.chapter} and re-test the exact gap.`
+    : `As soon as there's a test, we turn it into a targeted plan automatically.`
 
   return (
     <PhoneFrame
@@ -21,61 +46,42 @@ export default function FixPlan() {
       </button>
 
       <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', color: c.red, marginBottom: 4 }}>Closing the gap</div>
-      <h2 style={{ fontFamily: serif, fontWeight: 600, fontSize: 26, lineHeight: 1.1, margin: '0 0 14px' }}>Quadratic word problems</h2>
+      <h2 style={{ fontFamily: serif, fontWeight: 600, fontSize: 26, lineHeight: 1.1, margin: '0 0 6px' }}>{gapTitle}</h2>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
-        <div style={{ flex: 1, height: 8, background: '#EDE6DB', borderRadius: 5, overflow: 'hidden' }}>
-          <div style={{ width: '33%', height: '100%', background: 'linear-gradient(90deg,#2354C7,#6E8CEA)', borderRadius: 5 }} />
+      {hasChapter && (
+        <div style={{ fontSize: 13, fontWeight: 700, color: c.ink3, marginBottom: 14 }}>
+          Weakest chapter · <span style={{ color: c.ink2 }}>{weakest!.chapter}</span> · <span style={{ color: c.blue }}>{pct}% ready</span>
         </div>
-        <span style={{ fontSize: 13, fontWeight: 800, color: c.blue }}>1 / 3 done</span>
-      </div>
+      )}
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 11, marginBottom: 20 }}>
-        {/* Day 1 done */}
-        <div style={{ background: c.blueWash, border: `1px solid ${c.blueBorder}`, borderRadius: 16, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 13 }}>
-          <div style={{ width: 28, height: 28, borderRadius: '50%', background: c.blue, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 900, fontSize: 14, flex: 'none' }}>✓</div>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 15, fontWeight: 800, color: c.blueDeep }}>Day 1 · Watch + 4 guided problems</div>
-            <div style={{ fontSize: 12.5, color: c.blueMid, fontWeight: 600 }}>Completed yesterday · 14 min</div>
+      {hasChapter && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18 }}>
+          <div style={{ flex: 1, height: 8, background: '#EDE6DB', borderRadius: 5, overflow: 'hidden' }}>
+            <div style={{ width: `${pct}%`, height: '100%', background: 'linear-gradient(90deg,#2354C7,#6E8CEA)', borderRadius: 5 }} />
           </div>
+          <span style={{ fontSize: 13, fontWeight: 800, color: c.blue }}>{pct}%</span>
         </div>
-        {/* Day 2 current */}
-        <button
-          onClick={() => nav('/milestone')}
-          style={{ textAlign: 'left', background: c.white, border: `2px solid ${c.amber}`, borderRadius: 16, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 13, boxShadow: '0 8px 18px -12px rgba(224,160,32,.6)' }}
-        >
-          <div style={{ width: 28, height: 28, borderRadius: '50%', background: c.amber, display: 'flex', alignItems: 'center', justifyContent: 'center', color: c.navy, fontWeight: 900, fontSize: 14, flex: 'none' }}>2</div>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 15, fontWeight: 800 }}>Day 2 · Practice set (6 problems)</div>
-            <div style={{ fontSize: 12.5, color: c.amberDeep, fontWeight: 700 }}>Today · ~15 min · resume now</div>
-          </div>
-          <span style={{ color: c.amber, fontWeight: 900 }}>→</span>
-        </button>
-        {/* Day 3 locked */}
-        <div style={{ background: c.white, border: `1px solid ${c.line2}`, borderRadius: 16, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 13, opacity: 0.65 }}>
-          <div style={{ width: 28, height: 28, borderRadius: '50%', border: '2px solid #D8CFC0', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, flex: 'none' }}>🔒</div>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 15, fontWeight: 800, color: c.ink3 }}>Day 3 · Re-test the gap</div>
-            <div style={{ fontSize: 12.5, color: c.ink4, fontWeight: 600 }}>Unlocks after Day 2 · Thursday</div>
-          </div>
-        </div>
+      )}
+
+      {/* What the gap is */}
+      <div style={{ background: c.white, border: `1px solid ${c.line2}`, borderRadius: 16, padding: '14px 16px', marginBottom: 20 }}>
+        <div style={{ fontSize: 11.5, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', color: c.ink3, marginBottom: 6 }}>What&apos;s going on</div>
+        <p style={{ margin: 0, fontSize: 14, lineHeight: 1.45, color: c.ink2, fontWeight: 500 }}>{gapDetail}</p>
       </div>
 
       {/* tonight, ask */}
       <div style={{ background: c.ink, borderRadius: 18, padding: '18px 20px', color: c.cream, marginBottom: 'auto' }}>
-        <div style={{ fontSize: 11.5, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', color: c.amber, marginBottom: 12 }}>Tonight, ask {child.name}</div>
+        <div style={{ fontSize: 11.5, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', color: c.amber, marginBottom: 12 }}>Tonight, with {child.name}</div>
         <div style={{ background: 'rgba(255,255,255,.06)', borderRadius: 12, padding: '13px 15px', marginBottom: 10 }}>
-          <p style={{ margin: 0, fontFamily: serif, fontSize: 16, lineHeight: 1.4, fontWeight: 500 }}>
-            &ldquo;If a number plus its reciprocal is 10/3 — what&apos;s your <em>first</em> step before touching the formula?&rdquo;
-          </p>
+          <p style={{ margin: 0, fontFamily: serif, fontSize: 16, lineHeight: 1.4, fontWeight: 500 }}>{actionTonight}</p>
         </div>
         <p style={{ margin: 0, fontSize: 12.5, color: c.creamMute, fontWeight: 600 }}>
-          You&apos;re checking if he can <b style={{ color: c.cream }}>set up</b> the equation — that&apos;s the exact gap.
+          <b style={{ color: c.cream }}>Our side · </b>{ourSide}
         </p>
       </div>
 
-      <Btn style={{ marginTop: 14, fontWeight: 800 }} onClick={() => nav('/milestone')}>
-        Resume Day 2 →
+      <Btn style={{ marginTop: 14, fontWeight: 800 }} onClick={() => nav(hasChapter ? '/milestone' : '/audit/intro')}>
+        {hasChapter ? 'Start the fix →' : 'Run a test →'}
       </Btn>
     </PhoneFrame>
   )

@@ -109,9 +109,12 @@ test writes events to SQLite; the engine computes every report from that stored
 history instead of synthetic data — so taking a test permanently changes the
 child's profile, and the longitudinal record accumulates (the moat).
 
-- `server/db/store.ts` — a narrow `Store` interface + `SqliteStore`
-  (better-sqlite3). Swapping to Postgres later means one more implementation;
-  nothing else changes.
+- `server/db/store.ts` — a narrow async `Store` interface with two
+  implementations: `SqliteStore` (better-sqlite3, local dev) and `PostgresStore`
+  (`server/db/postgres.ts`, `pg`, production). `getStore()` picks Postgres when
+  `DATABASE_URL` is set, SQLite otherwise — that one env var is the entire swap,
+  nothing else in the app changes. Both are verified against the same seed/report
+  path (identical output).
 - On first boot the store **seeds** Mukul's synthetic history so the demo starts
   full — but it's now editable, persisted data.
 - `GET /api/report/:childId` computes from stored events · `POST /api/sessions`
@@ -121,7 +124,9 @@ child's profile, and the longitudinal record accumulates (the moat).
   answer-changes) and posts them; `AppContext` shows the stored report (with a
   synthetic offline fallback) and refreshes after each test.
 
-Data lives in `parentproof.db` (gitignored; set `DB_PATH` to relocate).
+Locally, data lives in `parentproof.db` (gitignored; set `DB_PATH` to relocate).
+In production, set `DATABASE_URL` and it lives in Postgres instead (see
+**Hosting** below).
 
 ## Prediction vs. actual — the trust engine (`/accuracy`)
 
@@ -140,8 +145,85 @@ show misses, not just hits.
   board band, the per-exam record (honest about the one miss), and an
   enter-marks form. Reached from the Term Audit's predicted-boards tile.
 
-`npm test` covers the engine (10), accuracy (10), question guardrail (8),
-language guardrail (7), WhatsApp formatting (5), and the store (3) — 43 tests.
+`npm test` covers the engine, accuracy, question + language guardrails, WhatsApp
+formatting, the store (incl. auth tokens + ownership), and LLM credential
+resolution — 51 tests.
+
+## Auth & multi-user
+
+Every browser gets its **own** account — there is no shared/global user any more.
+
+- **Session tokens.** On first load the client mints an anonymous session
+  (`POST /api/auth/session` → a random bearer token in the `auth_tokens` table)
+  and stores it (`pp.token`). Every user-data request carries it
+  (`Authorization: Bearer …`, via `authHeaders()`).
+- **Ownership is enforced.** `requireAuth` resolves the token to a parent id;
+  each child-scoped endpoint (`report`, `sessions`, `accuracy`, `predictions`,
+  `exams`, `child`) checks the child is owned by that parent — a different token
+  gets **404**, never another family's data. `GET /api/me` returns the parent +
+  the children they own; `AppContext` adopts the first child's id (no more
+  hardcoded `mukul`).
+- **Guest → claimed on the real account.** `POST /api/account` upgrades *this*
+  authenticated (anonymous) parent to claimed with name + phone; the WhatsApp
+  inbound webhook find-or-creates a parent by verified phone.
+
+Verified end-to-end: two sessions get distinct tokens and isolated children;
+each reads only its own report; cross-account reads 404.
+
+- **Multiple children per account.** `POST /api/children` adds a child;
+  `GET /api/me` returns all of them; the You screen lists them with an **Active**
+  marker and one-tap **Switch** (`switchChild` in `AppContext` re-points the
+  active child + report). "Add a child" reuses the onboarding flow.
+- **Cross-device login.** A claimed account resumes on a new device via a
+  one-time code sent to its WhatsApp number: `POST /api/auth/login/start` (find
+  parent by verified phone → store a 6-digit code, 10-min expiry, ≤5 attempts)
+  and `POST /api/auth/login/verify` (mints a fresh token bound to that same
+  parent). The `/login` screen drives it (phone → code). Delivery uses WhatsApp
+  when configured; in mock the code is returned as `devCode` so it's testable.
+  Phones are stored digits-only so login + inbound lookups match.
+
+Verified end-to-end (curl + browser): a brand-new session logs into an existing
+claimed account and sees that account's child; codes are one-time; wrong/expired
+codes are rejected.
+
+## Onboarding — real accounts start empty
+
+A freshly minted account has **no children** — the parent creates their own.
+
+- The funnel (`Welcome → OnboardChild → OnboardGoal → audit → test → Diagnosis →
+  Home`) creates a real child at the commit point: `OnboardGoal` calls
+  `createChild()` → `POST /api/children`, which becomes the active `childId`.
+  The kid test then posts real events against it (`recordSession`), so `Home`
+  fills with that child's own data — no synthetic stand-in.
+- **First-run empty state.** With no child yet, `Home` shows a "Let's audit your
+  child's learning" prompt (Start the free audit) plus a **"Load demo data"**
+  escape hatch (`POST /api/children` with `seedDemo`) so the rich demo history is
+  one tap away for exploring.
+- The old global auto-seed is gone; `seedDemoChild` is now on-demand only.
+
+Verified end-to-end (browser): a fresh session starts child-less, the empty
+state renders, "Load demo" fills the dashboard, and typing a name in onboarding
+creates that child and lands on the audit.
+
+## Security & DPDP
+
+Hardening for real users, all verified end-to-end:
+
+- **Tokens hashed at rest** — `auth_tokens` stores `sha256(token)`, so a DB leak
+  never exposes live sessions (the raw token lives only in the client).
+- **Rate limiting** — an in-memory fixed-window limiter guards the auth
+  endpoints (session mint, login start/verify) against brute-force and spam;
+  swap for Redis when multi-instance.
+- **WhatsApp webhook signature** — `/api/whatsapp/inbound` verifies Meta's
+  `X-Hub-Signature-256` HMAC (raw body captured for it) when
+  `WHATSAPP_APP_SECRET` is set; skipped in dev/mock.
+- **DPDP export + delete** — `GET /api/me/export` downloads *all* of an account's
+  data as JSON; `DELETE /api/me` (`store.deleteParent`) permanently cascades away
+  the parent, every child's answers/sessions/exams/predictions, and all tokens.
+  Wired to the You screen's Export/Delete buttons. Verified: after delete the DB
+  has zero rows for that account and the token 401s.
+- CORS locked to `CORS_ORIGIN` in production; `x-powered-by` off; `trust proxy`
+  on for correct client IPs behind Render/Cloudflare.
 
 ## Guest-first — experience before login
 
@@ -149,29 +231,179 @@ No sign-up to begin. A parent runs the whole audit — take a test, get the
 diagnosis, browse the tracker — as a **guest**, and is only asked for details
 when they want to *keep* something. Value before data capture.
 
-- `AppContext` holds an `accountStatus` of `'guest' | 'claimed'`, persisted to
-  `localStorage` (`pp.status` / `pp.name` / `pp.phone`) so the guest's session
-  survives a reload. `claimAccount(name, phone)` flips the status, saves locally,
-  and best-effort posts to `POST /api/account` (`upsertParent`).
+- `AppContext` holds an `accountStatus` of `'guest' | 'claimed'` and a
+  `parentChannel` (`'whatsapp' | 'manual'`), persisted to `localStorage`
+  (`pp.status` / `pp.name` / `pp.phone` / `pp.channel`) so the guest's session
+  survives a reload. `claimAccount(name, phone, channel)` flips the status, saves
+  locally, and best-effort posts to `POST /api/account` (`upsertParent`).
 - `src/components/SaveGate.tsx` — a bottom-sheet that slides up (ppSlideUp /
-  ppScrimIn) asking only for name + WhatsApp number. Rendered inside the phone
-  frame so it overlays any screen. "Not now" keeps them browsing.
+  ppScrimIn), rendered inside the phone frame so it overlays any screen. "Not
+  now" keeps them browsing.
+
+**WhatsApp is the login — no OTP on the phone.** On a phone the parent's own
+WhatsApp is already installed and verified, so there is nothing to verify again:
+"Continue with WhatsApp" opens their WhatsApp composing a linking message to our
+Business number (`waAccountLink`, with a short correlation code). *Sending* it
+identifies them by their WhatsApp-verified number — zero passwords, zero OTP,
+zero typing. The loop closes server-side at `POST /api/whatsapp/inbound`, where
+Meta delivers the inbound message: the sender is already trusted, so we fill in
+the verified number and profile name and mark the account claimed. A "type your
+number instead" toggle stays as the desktop fallback (`channel: 'manual'`). Set
+`VITE_WA_BUSINESS_NUMBER` to point at the real Business sender; unset, the link
+opens the WhatsApp composer so the flow is still demoable.
 - The gate is offered at the natural moments, guests only: **after a test**
   (auto-prompt on the Diagnosis card, once per session), and on any *save/keep*
   intent — Home's "Save the record", the Upgrade CTA (must save before paying),
   the You screen's account card, and Welcome's "Sign in". Once claimed, those
   same surfaces show the parent's name/phone instead.
 
+## Responsive layouts — real screens on phone *and* desktop
+
+The app is no longer a phone-mockup-on-a-backdrop everywhere. It renders as a
+genuine responsive product: a true web layout on laptop/desktop and a
+full-screen mobile app on phones — one codebase, one build, no fake device
+chrome on the real screens.
+
+- `src/hooks/useBreakpoint.ts` — `useIsDesktop()` (breakpoint 960px), the single
+  switch screens read to branch layout.
+- `src/components/AppShell.tsx` (+ `shell.css`) — the product shell. Desktop: a
+  persistent left **sidebar** (logo, "Start a test", nav, account chip) + a wide,
+  centred content column. Phone: content fills the screen with a fixed **bottom
+  nav**. Reflowing grids (`.pp-grid` / `.pp-grid-2`) collapse multi-column
+  dashboards to a single column on phones.
+- `Welcome` is now a real **marketing landing page** on wide screens (sticky nav,
+  two-column hero with a sample Diagnosis Card, the 55%/ASER proof band, a
+  three-step "how it works", and a pricing CTA) and a clean stacked pitch on
+  phones.
+- The whole **logged-in product** is now on `AppShell`: `Home` (two-column
+  dashboard), `Tracker`, `Accuracy`, and `You` — one consistent sidebar on
+  desktop / bottom nav on phone, no bezel. Content screens use a centred
+  max-width column so wide screens stay readable.
+- `SaveGate` adapts too: a centred **modal** on desktop, a **bottom sheet** on
+  phone.
+- `PhoneFrame` (the bezel look) now only wraps the **funnel/one-off** screens not
+  yet migrated — it carries its own centring stage, so migrated full-bleed
+  screens and legacy framed screens coexist. **Still on `PhoneFrame`:** the
+  onboarding + kid-test funnel, Diagnosis, FixPlan, TermAudit, Milestone,
+  Upgrade, DevLlm.
+
 ## What's next
 
-- **Accounts + auth** — full multi-parent/child on top of the store and the
-  guest→claimed foundation (schema has `parents`/`children`); wire the DPDP
-  consent/export/delete actions.
-- **Payments** (Razorpay/UPI) to make the paywall real.
-- **Aggregate accuracy** — publish the cross-cohort "within ±8% for X% of
-  children" stat (per-child track record is live).
-- **Deploy** — swap `SqliteStore` for a `PostgresStore` (the interface is ready)
-  and host; add real `ANTHROPIC_API_KEY` / WhatsApp credentials.
+- **Finish the responsive migration** — move the remaining screens (Tracker,
+  Accuracy, You, the funnel) onto `AppShell` / responsive layouts so every route
+  is first-class on both form factors.
+- **Razorpay production keys** — the pay flow is real end-to-end (order → checkout
+  → server-side signature verify → entitlement); set `RAZORPAY_KEY_ID` /
+  `RAZORPAY_KEY_SECRET` to take live payments instead of the deterministic mock.
+- **Approved WhatsApp templates** — the OTP and weekly-card sends are wired to the
+  Meta Cloud API; register the `WHATSAPP_OTP_TEMPLATE` (AUTHENTICATION) and card
+  templates so business-initiated messages deliver outside a 24h window.
+
+## Details worth noting
+
+- **Self-hosted fonts.** Newsreader + Hanken Grotesk are bundled via
+  `@fontsource-variable` and imported in `main.tsx` — no Google Fonts CDN in the
+  client (removes a third-party domain from the critical path; the built output
+  contains zero `googleapis`/`gstatic` references).
+- **Cross-cohort accuracy.** `GET /api/accuracy/aggregate` (public, anonymised —
+  no PII) pools predictions across every child and reports "within ±8% on X% of
+  N predictions across M children". Shown as social proof on the Accuracy
+  screen. Declared before `/api/accuracy/:childId` so the literal path wins.
+- **Funnel screens are engine-driven.** `FixPlan` and `TermAudit` render from the
+  computed `report` (the weakest chapter + insight, the readiness trajectory, the
+  per-chapter ledger) rather than hardcoded numbers.
+- **CI** (`.github/workflows/ci.yml`) runs build + tests and a smoke job on every
+  push/PR.
+- **Payments are real (Razorpay), mock-safe.** `server/payments.ts` creates orders
+  and verifies the checkout signature with an HMAC (`HMAC_SHA256(order_id|payment_id)`)
+  — no SDK. Without `RAZORPAY_KEY_ID`/`RAZORPAY_KEY_SECRET` it returns a
+  deterministic mock order (`order_mock_*`) and accepts the verify, so the whole
+  `POST /api/pay/order → checkout → POST /api/pay/verify → setPlan` flow is testable
+  without keys. The client (`src/api/payment.ts`) loads Razorpay's checkout for real
+  keys and short-circuits to verify in mock mode; `Upgrade.tsx` wires both plans and
+  `AppContext.markPlan` reflects the entitlement from `/api/me`.
+- **WhatsApp OTP send.** `sendOtp` (`server/whatsapp.ts`) delivers the login code via
+  the Meta Cloud API — an approved AUTHENTICATION template (`WHATSAPP_OTP_TEMPLATE`)
+  when set, else plain text inside a 24h window; mock-safe (returns `devCode` for
+  cross-device login without creds). Wired into `POST /api/auth/login/start`.
+- **Installable PWA.** `public/manifest.webmanifest` + SVG app icons (a maskable
+  variant with safe-zone padding) + apple-web-app meta make the app installable to the
+  home screen; the manifest keeps the relative `./` scope so it works under a hash
+  router and inside Capacitor.
+- **API integration tests.** `server/api.test.ts` boots the real server as a
+  subprocess (temp SQLite, mock mode), polls health, and exercises the critical HTTP
+  path end-to-end — auth/session, `/api/me`, child creation + ownership isolation
+  (cross-account 404), reports, RAG status, aggregate accuracy, and the full mock
+  payment flow.
+
+## Hosting
+
+The frontend is a static build (Vercel today). The backend + database can't live
+on Vercel-static — Vercel keeps no long-running process and no persistent disk —
+so they need a home of their own. The `PostgresStore` makes that a config change,
+not a rewrite.
+
+**The stack (India-first, DPDP-friendly):**
+
+1. **Database — Supabase Postgres in Mumbai (`ap-south-1`).** In-region storage
+   of minors' data is a real DPDP win; Supabase also brings `pgvector` (for RAG,
+   below) and auth/storage for the roadmap — all on the DB we already use.
+2. **Backend — the Express app as an always-on service** (Render / Railway / Fly).
+   Set `DATABASE_URL`, `ANTHROPIC_API_KEY`, `WHATSAPP_*`, `CORS_ORIGIN`. Boots,
+   creates its schema, seeds.
+3. **Frontend — Vercel**, built with `VITE_API_BASE` pointing at your **own**
+   API domain (below).
+
+**First-party domains only.** The client resolves exactly one critical-path
+host — its API base — and it must be a domain *you* control (`api.parentproof.app`,
+Cloudflare-proxied), never a raw `*.onrender.com` or `*.supabase.co`. The
+database is reached **server-side only**, so `*.supabase.co` never enters the
+client's critical path at all (the React app has no Supabase SDK). This lets you
+re-point origins with a DNS change instead of forcing every old install onto a
+new build. Full runbook — Supabase connection specifics, the Cloudflare setup,
+and the rule for future vendor SDKs — in **[`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)**.
+
+The SQLite→Postgres swap is verified end-to-end: pointing `DATABASE_URL` at a
+real Postgres yields byte-identical reports, persisted writes, and the same
+accuracy track record as local SQLite. See `.env.example` for every variable.
+Point the frontend at no backend and the app degrades gracefully — mock
+LLM/WhatsApp and the synthetic offline report.
+
+## LLM providers & RAG
+
+The model layer is provider-agnostic. `server/llm/` dispatches one `complete`
+shape to per-vendor adapters — **Claude, GPT (OpenAI), Groq, and Gemini** —
+selected by credentials resolved from either the environment (production) or
+per-request `x-llm-*` headers (BYOK testing). Question authoring, blind answer-key
+verification, and prose rendering all run through it; the safety contract —
+**the engine owns every number; the LLM only writes questions and prose** —
+holds identically across providers, which is what makes the choice a detail, not
+a risk.
+
+- **BYOK testing panel** (`/dev/llm`, reachable from *You*): enter your own
+  provider key on your device to run real generation against any of the four
+  providers. The key is stored locally and sent to our backend, which makes the
+  call (no browser CORS, adapters stay server-side). `POST /api/llm/test` does a
+  round-trip connectivity check. For production the key moves to server env and
+  this panel is disabled — same code path. **It's a dev affordance, not a
+  user-facing feature.**
+- **Mock without credentials** — no key anywhere → the deterministic static bank
+  and the engine's own safe card copy, so the whole app still runs.
+
+**RAG — syllabus-grounded generation.** `server/rag/` grounds question authoring
+in the child's actual board/class/chapter. `rag_chunks` stores syllabus passages
++ embeddings (both stores); `embed.ts` uses a real embedding model with a key
+(Gemini/OpenAI) or a deterministic hashing embedder offline; `ingest`/`retrieve`
+embed → metadata-filter → cosine-rank the top-k, which `/api/generate-test`
+injects as grounding context (so a real model writes syllabus-exact items — the
+guardrails still run). A starter CBSE Class-10 Maths corpus auto-seeds on boot;
+`POST /api/rag/ingest` adds material, `GET /api/rag/search` inspects retrieval.
+Ranking is JS-cosine over metadata-filtered candidates today (portable, tested);
+at scale, swap `getChunks` for a pgvector `<=>` query — nothing else changes.
+The starter corpus covers CBSE Class-10 **Maths + Science** (71 chunks across ~26
+chapters); retrieval filters by subject and cosine-ranks the chapter, so it's
+robust to chapter-name differences. Design notes in
+**[`docs/LLM_AND_RAG.md`](docs/LLM_AND_RAG.md)**.
 
 ## Run it
 
@@ -180,8 +412,10 @@ npm install
 npm run dev      # http://localhost:5173
 ```
 
-On a laptop the app renders inside a phone frame (390–400px device). On a real
-phone or a narrow window it fills the screen edge-to-edge.
+On a laptop/desktop the migrated screens render as a full responsive web app
+(sidebar + wide content); on a phone or narrow window they fill the screen with
+a bottom nav. Screens still on the legacy `PhoneFrame` show the centred phone
+device until they're migrated.
 
 ```bash
 npm run build    # type-check + production build to dist/

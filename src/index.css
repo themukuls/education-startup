@@ -13,7 +13,7 @@ body {
 body {
   background: #d8d0c1;
   color: #1e1b16;
-  font-family: 'Hanken Grotesk', system-ui, -apple-system, sans-serif;
+  font-family: 'Hanken Grotesk Variable', 'Hanken Grotesk', system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
@@ -100,6 +100,16 @@ a:hover {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+@keyframes ppPop {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
   }
 }
 .pp-screen-enter {

@@ -1,61 +1,60 @@
-// Store singleton + first-boot seed. Seeding loads Mukul's synthetic history so
-// the demo starts full — but it's now real, persisted data you can add to.
+// Store singleton + demo seeding. Picks Postgres when DATABASE_URL is set
+// (production), else SQLite (local dev). There is no global hardcoded user any
+// more: each authenticated parent owns their own children. To keep the app full
+// while onboarding is built, a freshly-minted anonymous account is seeded with
+// its OWN demo child (isolated from every other account).
 
-import { SqliteStore, type Store } from './store.ts'
+import { randomUUID } from 'node:crypto'
+import { SqliteStore, type Store, type StoreKind } from './store.ts'
+import { PostgresStore } from './postgres.ts'
 import { buildStream } from '../../src/engine/synthetic.ts'
+import { seedCorpusIfEmpty } from '../rag/corpus.ts'
 
 const DB_PATH = process.env.DB_PATH ?? 'parentproof.db'
+const DATABASE_URL = process.env.DATABASE_URL ?? ''
 
-let store: Store | null = null
+export const storeKind: StoreKind = DATABASE_URL ? 'postgres' : 'sqlite'
 
-export function getStore(): Store {
-  if (!store) {
-    store = new SqliteStore(DB_PATH)
-    seedIfEmpty(store)
-  }
-  return store
+let storePromise: Promise<Store> | null = null
+
+/** Resolve the shared Store, creating schema on first call. */
+export function getStore(): Promise<Store> {
+  if (!storePromise) storePromise = create()
+  return storePromise
 }
 
-function seedIfEmpty(s: Store): void {
-  if (!s.isEmpty()) return
-  const now = Date.now()
-  s.upsertParent({ id: 'priya', name: 'Priya Sharma', phone: '' })
-  s.upsertChild({
-    id: 'mukul',
-    parentId: 'priya',
-    name: 'Mukul',
-    board: 'CBSE',
-    klass: 10,
-    subjects: ['Maths', 'Science'],
-    monthlySpend: 5000,
-  })
-  // anchor the synthetic history to "now" so recency weighting is correct
-  const stream = buildStream({ archetype: 'improver', childId: 'mukul', asOf: now, seed: 7 })
-  for (const session of stream.sessions) s.addSession(session)
-  s.addAnswers(stream.answers)
+async function create(): Promise<Store> {
+  const s: Store = DATABASE_URL ? new PostgresStore(DATABASE_URL) : new SqliteStore(DB_PATH)
+  await s.init()
+  await seedCorpusIfEmpty(s) // ground question generation in a starter syllabus corpus
+  return s
+}
 
-  // Seed a believable — and honest (one miss) — prediction track record.
+/** Seed one child's full demo history (synthetic events + an honest track record). */
+export async function seedDemoChild(s: Store, parentId: string, childId: string, name = 'Mukul'): Promise<void> {
+  const now = Date.now()
+  await s.upsertChild({ id: childId, parentId, name, board: 'CBSE', klass: 10, subjects: ['Maths', 'Science'], monthlySpend: 5000 })
+  const stream = buildStream({ archetype: 'improver', childId, asOf: now, seed: 7 })
+  for (const session of stream.sessions) await s.addSession(session)
+  await s.addAnswers(stream.answers)
+
   const WEEK = 7 * 24 * 60 * 60 * 1000
-  const track: { subject: string; examType: string; point: number; low: number; high: number; madeWk: number; marks: number; examWk: number }[] = [
-    { subject: 'Maths', examType: 'school_ut', point: 54, low: 42, high: 66, madeWk: 6, marks: 58, examWk: 5 }, // +4 ✓
-    { subject: 'Science', examType: 'school_ut', point: 57, low: 45, high: 69, madeWk: 5, marks: 55, examWk: 4 }, // -2 ✓
-    { subject: 'Maths', examType: 'midterm', point: 61, low: 53, high: 69, madeWk: 3, marks: 66, examWk: 2 }, // +5 ✓
-    { subject: 'Maths', examType: 'school_ut', point: 66, low: 58, high: 74, madeWk: 2, marks: 55, examWk: 1 }, // -11 ✗ (honest miss)
+  const track = [
+    { subject: 'Maths', examType: 'school_ut', point: 54, low: 42, high: 66, madeWk: 6, marks: 58, examWk: 5 },
+    { subject: 'Science', examType: 'school_ut', point: 57, low: 45, high: 69, madeWk: 5, marks: 55, examWk: 4 },
+    { subject: 'Maths', examType: 'midterm', point: 61, low: 53, high: 69, madeWk: 3, marks: 66, examWk: 2 },
+    { subject: 'Maths', examType: 'school_ut', point: 66, low: 58, high: 74, madeWk: 2, marks: 55, examWk: 1 }, // honest miss
   ]
   for (const t of track) {
-    s.addPrediction({
-      childId: 'mukul',
-      subject: t.subject,
-      examType: t.examType,
-      point: t.point,
-      low: t.low,
-      high: t.high,
-      basisReadiness: t.point,
-      madeAt: now - t.madeWk * WEEK,
-    })
-    s.addExamResult({ childId: 'mukul', subject: t.subject, examType: t.examType, marks: t.marks, date: now - t.examWk * WEEK })
+    await s.addPrediction({ childId, subject: t.subject, examType: t.examType, point: t.point, low: t.low, high: t.high, basisReadiness: t.point, madeAt: now - t.madeWk * WEEK })
+    await s.addExamResult({ childId, subject: t.subject, examType: t.examType, marks: t.marks, date: now - t.examWk * WEEK })
   }
-  console.log(
-    `[db] seeded Mukul — ${stream.answers.length} answers across ${stream.sessions.length} sessions, ${track.length} predictions`,
-  )
+}
+
+/** Mint a fresh anonymous account. It starts EMPTY — the parent creates their
+ * own child in onboarding (or loads demo data on demand). No global/shared user. */
+export async function mintAnonAccount(s: Store): Promise<{ parentId: string }> {
+  const parentId = `p_${randomUUID()}`
+  await s.createParent({ id: parentId, name: '', phone: '', channel: 'manual', claimed: false })
+  return { parentId }
 }

@@ -14,11 +14,12 @@ import Tracker from './screens/Tracker'
 import Accuracy from './screens/Accuracy'
 import Upgrade from './screens/Upgrade'
 import You from './screens/You'
+import DevLlm from './screens/DevLlm'
+import Login from './screens/Login'
 
 export default function App() {
   return (
-    <div className="pp-stage">
-      <Routes>
+    <Routes>
         <Route path="/" element={<Welcome />} />
         <Route path="/onboarding/child" element={<OnboardChild />} />
         <Route path="/onboarding/goal" element={<OnboardGoal />} />
@@ -34,8 +35,9 @@ export default function App() {
         <Route path="/accuracy" element={<Accuracy />} />
         <Route path="/upgrade" element={<Upgrade />} />
         <Route path="/you" element={<You />} />
+        <Route path="/dev/llm" element={<DevLlm />} />
+        <Route path="/login" element={<Login />} />
         <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </div>
+    </Routes>
   )
 }

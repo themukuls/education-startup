@@ -1,9 +1,10 @@
-// Prose rendering — the second LLM job. Turns the engine's CHOSEN insight into
-// a warm, parent-facing card under the template contract. The model never
-// invents a number or a claim; the guardrail (checkCard) enforces that, and any
-// violation falls back to the engine's own safe strings.
+// Prose rendering — the second LLM job, provider-agnostic. Turns the engine's
+// CHOSEN insight into a warm, parent-facing card under the template contract.
+// The model never invents a number or a claim; the guardrail (checkCard)
+// enforces that, and any violation falls back to the engine's own safe strings —
+// identically whichever provider produced the prose.
 
-import Anthropic from '@anthropic-ai/sdk'
+import { llmJson, type LlmCreds } from './llm/index.ts'
 import {
   allowedNumbers,
   checkCard,
@@ -11,31 +12,6 @@ import {
   type CardCopy,
   type RenderRequest,
 } from '../src/shared/card.ts'
-import { hasKey } from './generate.ts'
-
-const MODEL = 'claude-opus-4-8'
-
-let client: Anthropic | null = null
-function getClient(): Anthropic {
-  if (!client) client = new Anthropic()
-  return client
-}
-
-function extractJson(text: string): Record<string, unknown> {
-  const fence = text.match(/```(?:json)?\s*([\s\S]*?)```/)
-  const body = fence ? fence[1] : text
-  const start = body.indexOf('{')
-  const end = body.lastIndexOf('}')
-  if (start === -1 || end === -1) throw new Error('no JSON object in model response')
-  return JSON.parse(body.slice(start, end + 1))
-}
-
-function textOf(res: Anthropic.Message): string {
-  return res.content
-    .filter((b): b is Anthropic.TextBlock => b.type === 'text')
-    .map((b) => b.text)
-    .join('\n')
-}
 
 const RENDER_SYSTEM = `You are ParentProof's copywriter. You turn a diagnostic finding about a child's learning into one short, warm card a parent reads on their phone. You are given the finding already written plainly — your job is to make it human, not to add analysis.
 
@@ -57,20 +33,16 @@ Child: ${req.childName} · Subject: ${req.subject} · Chapter: ${req.chapter} ·
 Rewrite this as the card JSON now.`
 }
 
-async function callRender(req: RenderRequest, stricter: boolean): Promise<CardCopy> {
+async function callRender(creds: LlmCreds, req: RenderRequest, stricter: boolean): Promise<CardCopy> {
   const extra = stricter
     ? '\n\nYour previous attempt broke a rule (a banned word or an invented number). Re-do it: reuse ONLY the numbers in the input, and avoid every banned word.'
     : ''
-  const res = await getClient().messages.create({
-    model: MODEL,
-    max_tokens: 1500,
-    thinking: { type: 'adaptive' },
-    output_config: { effort: 'medium' },
+  const j = await llmJson<Record<string, unknown>>(creds, {
     system: RENDER_SYSTEM + extra,
-    messages: [{ role: 'user', content: buildPrompt(req) }],
-  } as unknown as Anthropic.MessageCreateParamsNonStreaming)
-
-  const j = extractJson(textOf(res))
+    user: buildPrompt(req),
+    maxTokens: 1500,
+    temperature: 0.6,
+  })
   return {
     headline: String(j.headline ?? ''),
     body: String(j.body ?? ''),
@@ -81,13 +53,16 @@ async function callRender(req: RenderRequest, stricter: boolean): Promise<CardCo
 }
 
 /** Render a card, guardrailed, with one retry then a safe fallback. */
-export async function renderCard(req: RenderRequest): Promise<{ card: CardCopy; source: 'llm' | 'mock' | 'fallback' }> {
-  if (!hasKey()) return { card: fallbackCard(req), source: 'mock' }
+export async function renderCard(
+  req: RenderRequest,
+  creds: LlmCreds | null,
+): Promise<{ card: CardCopy; source: 'llm' | 'mock' | 'fallback' }> {
+  if (!creds) return { card: fallbackCard(req), source: 'mock' }
 
   const allowed = allowedNumbers(req)
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      const card = await callRender(req, attempt > 0)
+      const card = await callRender(creds, req, attempt > 0)
       const reason = checkCard(card, allowed)
       if (!reason) return { card, source: 'llm' }
       console.warn(`[render] attempt ${attempt + 1} rejected: ${reason}`)

@@ -1,0 +1,35 @@
+# Render Blueprint for the ParentProof API (Option A: Express + Supabase).
+# New → Blueprint → point at this repo. Then set the sync:false secrets in the
+# dashboard (they are never committed). Frontend stays on Vercel and calls this
+# service via VITE_API_BASE. See docs/DEPLOYMENT.md.
+services:
+  - type: web
+    name: parentproof-api
+    runtime: node
+    plan: free
+    region: singapore # closest Render region to India
+    # branch: omitted → Render uses the branch you connect in the dashboard
+    buildCommand: npm install
+    startCommand: npm run server:start
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      # --- set these in the Render dashboard (Environment), not here ---
+      - key: DATABASE_URL # Supabase SESSION pooler, port 5432
+        sync: false
+      - key: CORS_ORIGIN # your Vercel URL, e.g. https://parentproof.vercel.app
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: WHATSAPP_TOKEN
+        sync: false
+      - key: WHATSAPP_PHONE_ID
+        sync: false

@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import PhoneFrame from '../components/PhoneFrame'
 import { Btn, Diamond } from '../components/ui'
@@ -13,7 +14,20 @@ const options: { key: Goal; title: string; sub: string }[] = [
 // Screen 03 — Goal & identity. You become the auditor (SDT: autonomy + identity).
 export default function OnboardGoal() {
   const nav = useNavigate()
-  const { child, goal, setGoal } = useApp()
+  const { child, goal, setGoal, createChild } = useApp()
+  const [creating, setCreating] = useState(false)
+
+  // Commit point: create THIS account's real child, then start the audit.
+  async function start() {
+    if (creating) return
+    setCreating(true)
+    try {
+      await createChild()
+    } catch (err) {
+      console.warn('[onboarding] child not persisted (backend unavailable):', err)
+    }
+    nav('/audit/intro')
+  }
 
   return (
     <PhoneFrame contentStyle={{ padding: '22px 26px 26px', color: c.ink }}>
@@ -87,8 +101,8 @@ export default function OnboardGoal() {
         </p>
       </div>
 
-      <Btn style={{ marginTop: 16, fontWeight: 700 }} onClick={() => nav('/audit/intro')}>
-        Create {child.name}&apos;s first audit →
+      <Btn style={{ marginTop: 16, fontWeight: 700 }} disabled={creating} onClick={start}>
+        {creating ? 'Creating…' : `Create ${child.name || 'your child'}’s first audit →`}
       </Btn>
     </PhoneFrame>
   )

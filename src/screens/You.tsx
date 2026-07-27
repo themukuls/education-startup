@@ -1,25 +1,21 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import PhoneFrame from '../components/PhoneFrame'
-import BottomNav from '../components/BottomNav'
+import AppShell from '../components/AppShell'
 import { useApp } from '../state/AppContext'
+import { exportMyData, deleteMyAccount } from '../api/auth'
 import { c, serif } from '../theme'
 
 // Screen 13 — You & your children (control). Parent-as-owner + DPDP consent + add-child.
 export default function You() {
   const nav = useNavigate()
-  const { parentName, parentInitial, parentPhone, child, accountStatus, openSaveGate } = useApp()
+  const { parentName, parentInitial, parentPhone, parentChannel, child, childId, children, switchChild, setChild, accountStatus, openSaveGate } = useApp()
   const [appearance, setAppearance] = useState<'Light' | 'Dark'>('Light')
   const [lang, setLang] = useState<'EN' | 'हिं'>('EN')
   const isGuest = accountStatus === 'guest'
 
   return (
-    <PhoneFrame
-      bg={c.home}
-      time="7:42"
-      contentStyle={{ padding: '18px 22px 86px', color: c.ink }}
-      footer={<BottomNav active="you" />}
-    >
+    <AppShell active="you">
+     <div style={{ maxWidth: 640, margin: '0 auto', color: c.ink }}>
       <h2 style={{ fontFamily: serif, fontWeight: 600, fontSize: 27, lineHeight: 1.1, margin: '0 0 16px' }}>You &amp; your children</h2>
 
       {/* account owner */}
@@ -33,29 +29,49 @@ export default function You() {
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 16, fontWeight: 800, color: '#fff' }}>{isGuest ? 'Guest' : parentName}</div>
           <div style={{ fontSize: 12.5, color: c.blueInk, fontWeight: 700 }}>
-            {isGuest ? 'Not saved yet — tap to keep your record' : parentPhone || 'Account owner · you control all data'}
+            {isGuest
+              ? 'Not saved yet — tap to keep your record'
+              : parentPhone || (parentChannel === 'whatsapp' ? 'Linked on WhatsApp ✓' : 'Account owner · you control all data')}
           </div>
         </div>
         <span style={{ background: 'rgba(255,255,255,.16)', borderRadius: 10, padding: '5px 10px', fontSize: 11, fontWeight: 800 }}>{isGuest ? 'Guest' : 'Core'}</span>
       </div>
 
-      <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', color: c.ink3, marginBottom: 9 }}>Children</div>
-      <div style={{ background: c.white, border: `1px solid ${c.line2}`, borderRadius: 16, padding: '14px 16px', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 13 }}>
-        <div style={{ width: 38, height: 38, borderRadius: '50%', background: c.blue, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, color: '#fff', flex: 'none' }}>{child.name[0]}</div>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 15, fontWeight: 800 }}>{child.name}</div>
-          <div style={{ fontSize: 12.5, color: c.ink3, fontWeight: 600 }}>Class {child.klass} {child.board} · {child.subjects.join(', ')}</div>
-        </div>
-        <span style={{ color: c.ink4, fontWeight: 700 }}>›</span>
+      <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', color: c.ink3, marginBottom: 9 }}>
+        Children{children.length > 1 ? ` · ${children.length}` : ''}
       </div>
+      {(children.length ? children : [{ id: childId ?? 'x', name: child.name, board: child.board, klass: child.klass, subjects: child.subjects }]).map((kid) => {
+        const active = kid.id === childId
+        return (
+          <div
+            key={kid.id}
+            onClick={() => !active && switchChild(kid.id)}
+            style={{ background: c.white, border: `${active ? 1.5 : 1}px solid ${active ? c.blue : c.line2}`, borderRadius: 16, padding: '14px 16px', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 13, cursor: active ? 'default' : 'pointer' }}
+          >
+            <div style={{ width: 38, height: 38, borderRadius: '50%', background: active ? c.blue : c.ink4, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, color: '#fff', flex: 'none' }}>{kid.name[0]?.toUpperCase()}</div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 15, fontWeight: 800 }}>{kid.name}</div>
+              <div style={{ fontSize: 12.5, color: c.ink3, fontWeight: 600 }}>Class {kid.klass} {kid.board} · {kid.subjects.join(', ')}</div>
+            </div>
+            {active ? (
+              <span style={{ background: c.blueWash, color: c.blue, borderRadius: 9, padding: '4px 9px', fontSize: 11, fontWeight: 800 }}>Active</span>
+            ) : (
+              <span style={{ fontSize: 12, fontWeight: 800, color: c.blue }}>Switch</span>
+            )}
+          </div>
+        )
+      })}
       <button
-        onClick={() => alert('Add a sibling — Family add-on (+₹499 / child)')}
-        style={{ width: '100%', textAlign: 'left', background: 'none', border: '1.5px dashed #CBBFA9', borderRadius: 16, padding: '14px 16px', marginBottom: 18, display: 'flex', alignItems: 'center', gap: 13 }}
+        onClick={() => {
+          setChild({ name: '', board: 'CBSE', klass: 10, subjects: ['Maths', 'Science'], monthlySpend: 0 })
+          nav('/onboarding/child')
+        }}
+        style={{ width: '100%', textAlign: 'left', background: 'none', border: '1.5px dashed #CBBFA9', borderRadius: 16, padding: '14px 16px', marginBottom: 18, display: 'flex', alignItems: 'center', gap: 13, cursor: 'pointer' }}
       >
         <div style={{ width: 38, height: 38, borderRadius: '50%', border: '2px solid #CBBFA9', display: 'flex', alignItems: 'center', justifyContent: 'center', color: c.ink4, fontSize: 22, flex: 'none' }}>+</div>
         <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 15, fontWeight: 800, color: c.ink2 }}>Add a sibling</div>
-          <div style={{ fontSize: 12.5, color: c.ink3, fontWeight: 600 }}>Family add-on · +₹499 / child</div>
+          <div style={{ fontSize: 15, fontWeight: 800, color: c.ink2 }}>Add a child</div>
+          <div style={{ fontSize: 12.5, color: c.ink3, fontWeight: 600 }}>Run a separate audit for each child</div>
         </div>
       </button>
 
@@ -69,8 +85,33 @@ export default function You() {
           Verified for {child.name} (minor). You can export or permanently delete his data at any time.
         </p>
         <div style={{ display: 'flex', gap: 9 }}>
-          <button onClick={() => alert('Exporting ' + child.name + '’s data…')} style={{ flex: 1, textAlign: 'center', background: c.home, border: 'none', borderRadius: 11, padding: 9, fontSize: 12.5, fontWeight: 800, color: c.ink2 }}>Export data</button>
-          <button onClick={() => alert('This permanently deletes all of ' + child.name + '’s data.')} style={{ flex: 1, textAlign: 'center', background: c.redWash, border: 'none', borderRadius: 11, padding: 9, fontSize: 12.5, fontWeight: 800, color: c.red }}>Delete data</button>
+          <button
+            onClick={async () => {
+              try {
+                await exportMyData()
+              } catch {
+                alert('Could not export right now. Please try again.')
+              }
+            }}
+            style={{ flex: 1, textAlign: 'center', background: c.home, border: 'none', borderRadius: 11, padding: 9, fontSize: 12.5, fontWeight: 800, color: c.ink2 }}
+          >
+            Export data
+          </button>
+          <button
+            onClick={async () => {
+              if (!window.confirm('This permanently deletes your account and ALL of your children’s data. This cannot be undone. Continue?')) return
+              try {
+                await deleteMyAccount()
+                window.location.assign('#/')
+                window.location.reload()
+              } catch {
+                alert('Could not delete right now. Please try again.')
+              }
+            }}
+            style={{ flex: 1, textAlign: 'center', background: c.redWash, border: 'none', borderRadius: 11, padding: 9, fontSize: 12.5, fontWeight: 800, color: c.red }}
+          >
+            Delete data
+          </button>
         </div>
       </div>
 
@@ -92,10 +133,19 @@ export default function You() {
         </div>
       </div>
 
-      <button onClick={() => nav('/')} style={{ background: 'none', border: 'none', color: c.ink3, fontSize: 13.5, fontWeight: 700, marginTop: 16, textAlign: 'center' }}>
+      <button
+        onClick={() => nav('/dev/llm')}
+        style={{ width: '100%', marginTop: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: c.white, border: `1px solid ${c.line2}`, borderRadius: 14, padding: '13px 16px' }}
+      >
+        <span style={{ fontSize: 13.5, fontWeight: 800, color: c.ink2 }}>🧪 Developer · LLM</span>
+        <span style={{ fontSize: 12.5, fontWeight: 700, color: c.blue }}>Test with your key ›</span>
+      </button>
+
+      <button onClick={() => nav('/')} style={{ background: 'none', border: 'none', color: c.ink3, fontSize: 13.5, fontWeight: 700, margin: '14px 0 0', width: '100%', textAlign: 'center' }}>
         Sign out
       </button>
-    </PhoneFrame>
+     </div>
+    </AppShell>
   )
 }
 

@@ -34,7 +34,8 @@ export default function PhoneFrame({
 }: PhoneFrameProps) {
   const inkColor = tint === 'dark' ? '#1E1B16' : '#D4DDF6'
   return (
-    <div className="pp-device pp-screen-enter" style={{ background: bg }}>
+    <div className="pp-stage">
+      <div className="pp-device pp-screen-enter" style={{ background: bg }}>
       <div className="pp-notch" style={{ background: notch }} />
 
       <div className="pp-statusbar" style={{ color: inkColor }}>
@@ -55,6 +56,7 @@ export default function PhoneFrame({
 
       <div className="pp-home-indicator" style={{ background: inkColor }} />
       <SaveGate />
+      </div>
     </div>
   )
 }

@@ -1,47 +1,25 @@
-// Question generation — the LLM layer.
+// Question generation — the LLM layer, now provider-agnostic.
 //
-// With an API key: claude-opus-4-8 generates syllabus-mapped items under a
-// structured-output schema, then a SECOND independent pass re-solves each item
-// and drops any whose marked answer it can't confirm (answer-key verification —
-// a wrong key must never reach a child). Without a key: a deterministic mock so
-// the whole app + integration path still runs.
+// With credentials (env, or BYOK headers from the frontend): the chosen model
+// generates syllabus-mapped items, then a SECOND independent pass re-solves each
+// item and drops any whose marked answer it can't confirm (answer-key
+// verification — a wrong key must never reach a child). Without credentials: a
+// deterministic mock so the whole app + integration path still runs.
+//
+// The provider is a detail; these guardrails are identical for Claude, GPT,
+// Groq or Gemini, which is exactly what makes the provider swappable.
 
-import Anthropic from '@anthropic-ai/sdk'
+import { llmJson, hasEnvLlm, type LlmCreds } from './llm/index.ts'
 import {
-  GENERATION_SCHEMA,
   validateItems,
   type GeneratedItem,
   type GenerateRequest,
-} from '../src/shared/quiz'
-import { auditQuestions } from '../src/data/testQuestions'
+} from '../src/shared/quiz.ts'
+import { auditQuestions } from '../src/data/testQuestions.ts'
 
-const MODEL = 'claude-opus-4-8'
-
+/** Back-compat: true when the SERVER env is configured (health/log). */
 export function hasKey(): boolean {
-  return !!(process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN)
-}
-
-let client: Anthropic | null = null
-function getClient(): Anthropic {
-  if (!client) client = new Anthropic() // resolves key from env
-  return client
-}
-
-/** Defensively pull a JSON object out of a model text response. */
-function extractJson(text: string): { questions?: unknown[]; answers?: unknown[] } {
-  const fence = text.match(/```(?:json)?\s*([\s\S]*?)```/)
-  const body = fence ? fence[1] : text
-  const start = body.indexOf('{')
-  const end = body.lastIndexOf('}')
-  if (start === -1 || end === -1) throw new Error('no JSON object in model response')
-  return JSON.parse(body.slice(start, end + 1))
-}
-
-function textOf(res: Anthropic.Message): string {
-  return res.content
-    .filter((b): b is Anthropic.TextBlock => b.type === 'text')
-    .map((b) => b.text)
-    .join('\n')
+  return hasEnvLlm()
 }
 
 const GEN_SYSTEM = `You are ParentProof's assessment author. You write short diagnostic questions that reveal what a student truly understands — not trivia, not trick questions.
@@ -55,9 +33,9 @@ Hard rules:
 - "misconception" states, in one short clause, what choosing a wrong option reveals about the student's gap.
 - "difficulty" is your estimate of the cohort error rate, 0 (trivial) to 1 (very hard).
 - Use plain text for maths (x^2, sqrt, /, ×). No LaTeX, no images.
-Return ONLY a JSON object of the form {"questions":[...]}. No prose.`
+Return ONLY a JSON object of the form {"questions":[{"prompt","options":[4],"answer","cogLevel","format","difficulty","misconception"}, ...]}.`
 
-function buildGenPrompt(req: GenerateRequest): string {
+function buildGenPrompt(req: GenerateRequest, grounding = ''): string {
   const mix = req.mix
     ? Object.entries(req.mix)
         .map(([k, v]) => `${v}×${k}`)
@@ -68,26 +46,18 @@ function buildGenPrompt(req: GenerateRequest): string {
 - Class: ${req.klass}
 - Subject: ${req.subject}
 - Chapter: ${req.chapter}
-- Cognitive mix: ${mix}
+- Cognitive mix: ${mix}${grounding}
 
 Return the JSON object now.`
 }
 
 /** Generation call. Returns items that pass the structural guardrail. */
-export async function generateWithClaude(req: GenerateRequest): Promise<GeneratedItem[]> {
-  const res = await getClient().messages.create({
-    model: MODEL,
-    max_tokens: 8000,
-    // adaptive thinking + high effort: question quality is the moat
-    thinking: { type: 'adaptive' },
-    output_config: { format: { type: 'json_schema', schema: GENERATION_SCHEMA }, effort: 'high' },
+export async function generateWithProvider(creds: LlmCreds, req: GenerateRequest, grounding = ''): Promise<GeneratedItem[]> {
+  const parsed = await llmJson<{ questions?: unknown[] }>(creds, {
     system: GEN_SYSTEM,
-    messages: [{ role: 'user', content: buildGenPrompt(req) }],
-    // cast: output_config typing varies across SDK minor versions; the runtime
-    // accepts it and we parse defensively regardless.
-  } as unknown as Anthropic.MessageCreateParamsNonStreaming)
-
-  const parsed = extractJson(textOf(res))
+    user: buildGenPrompt(req, grounding),
+    maxTokens: 8000,
+  })
   const { valid, dropped } = validateItems(Array.isArray(parsed.questions) ? parsed.questions : [])
   if (dropped.length) console.warn(`[generate] dropped ${dropped.length} malformed item(s):`, dropped)
   return valid
@@ -100,25 +70,20 @@ const VERIFY_SYSTEM = `You are an independent answer checker. For each question 
  * marked answer the checker confirms with confidence. This is the guardrail that
  * stops a hallucinated answer key from reaching a kid.
  */
-export async function verifyAnswers(items: GeneratedItem[]): Promise<GeneratedItem[]> {
+export async function verifyAnswers(creds: LlmCreds, items: GeneratedItem[]): Promise<GeneratedItem[]> {
   if (!items.length) return items
   const blind = items.map((q, i) => ({ i, prompt: q.prompt, options: q.options }))
-  const res = await getClient().messages.create({
-    model: MODEL,
-    max_tokens: 4000,
-    thinking: { type: 'adaptive' },
-    output_config: { effort: 'high' },
-    system: VERIFY_SYSTEM,
-    messages: [{ role: 'user', content: JSON.stringify(blind) }],
-  } as unknown as Anthropic.MessageCreateParamsNonStreaming)
-
   let answers: { index: number; confident: boolean }[] = []
   try {
-    const parsed = extractJson(textOf(res))
-    answers = Array.isArray(parsed.answers) ? (parsed.answers as typeof answers) : []
+    const parsed = await llmJson<{ answers?: { index: number; confident: boolean }[] }>(creds, {
+      system: VERIFY_SYSTEM,
+      user: JSON.stringify(blind),
+      maxTokens: 4000,
+    })
+    answers = Array.isArray(parsed.answers) ? parsed.answers : []
   } catch {
-    // if verification output is unparseable, fail safe: keep nothing rather than
-    // ship unverified keys
+    // if verification is unparseable, fail safe: keep nothing rather than ship
+    // unverified keys
     console.warn('[verify] unparseable verification response — dropping batch')
     return []
   }
@@ -131,7 +96,7 @@ export async function verifyAnswers(items: GeneratedItem[]): Promise<GeneratedIt
   })
 }
 
-// ---- Mock (no API key) ----
+// ---- Mock (no credentials) ----
 
 /** Deterministic mock: reuse the vetted static bank as generated items. */
 export function mockGenerate(req: GenerateRequest): GeneratedItem[] {
@@ -146,16 +111,21 @@ export function mockGenerate(req: GenerateRequest): GeneratedItem[] {
   }))
 }
 
-/** Full pipeline: generate → verify → validated items (or mock). */
-export async function generateTest(req: GenerateRequest): Promise<{ items: GeneratedItem[]; source: 'llm' | 'mock' }> {
-  if (!hasKey()) return { items: mockGenerate(req), source: 'mock' }
+/** Full pipeline: generate → verify → validated items (or mock when no creds).
+ * `grounding` is optional retrieved syllabus context (RAG). */
+export async function generateTest(
+  req: GenerateRequest,
+  creds: LlmCreds | null,
+  grounding = '',
+): Promise<{ items: GeneratedItem[]; source: 'llm' | 'mock'; provider?: string; grounded?: boolean }> {
+  if (!creds) return { items: mockGenerate(req), source: 'mock', grounded: !!grounding }
 
-  let items = await generateWithClaude(req)
+  let items = await generateWithProvider(creds, req, grounding)
   // one retry if the guardrail left us short
   if (items.length < req.count) {
-    const more = await generateWithClaude({ ...req, count: req.count - items.length })
+    const more = await generateWithProvider(creds, { ...req, count: req.count - items.length }, grounding)
     items = [...items, ...more]
   }
-  items = await verifyAnswers(items)
-  return { items: items.slice(0, req.count), source: 'llm' }
+  items = await verifyAnswers(creds, items)
+  return { items: items.slice(0, req.count), source: 'llm', provider: creds.provider, grounded: !!grounding }
 }

@@ -21,28 +21,99 @@ export interface ParentRecord {
   id: string
   name: string
   phone: string
+  /** how they linked: 'whatsapp' (verified by their phone, no OTP) or 'manual'. */
+  channel?: string
+  /** false while an anonymous guest; true once they save name + phone. */
+  claimed?: boolean
+  /** subscription entitlement: 'free' | 'core' | 'annual'. */
+  plan?: string
 }
 
+// The interface is async so the same seam backs SQLite (sync driver, wrapped)
+// and Postgres (async driver) with no change to callers — swap by env only.
 export interface Store {
-  isEmpty(): boolean
-  upsertParent(p: ParentRecord): void
-  upsertChild(c: ChildRecord): void
-  getChild(id: string): ChildRecord | null
-  addSession(s: SessionEvent): void
-  addAnswers(a: AnswerEvent[]): void
-  addExamResult(e: ExamResult): void
-  addPrediction(p: Prediction): string
-  getPredictions(childId: string): Prediction[]
-  getExamResults(childId: string): ExamResult[]
+  /** create schema + run migrations. Call once before use. */
+  init(): Promise<void>
+  isEmpty(): Promise<boolean>
+  upsertParent(p: ParentRecord): Promise<void>
+  /** insert a brand-new parent row (used to mint an anonymous account). */
+  createParent(p: ParentRecord): Promise<void>
+  getParent(id: string): Promise<ParentRecord | null>
+  getParentByPhone(phone: string): Promise<ParentRecord | null>
+  /** DPDP: permanently delete a parent and ALL their children's data + tokens. */
+  deleteParent(id: string): Promise<void>
+  /** set a parent's subscription plan ('free' | 'core' | 'annual'). */
+  setPlan(id: string, plan: string): Promise<void>
+  /** all children owned by a parent — the basis for per-user data isolation. */
+  getChildrenForParent(parentId: string): Promise<ChildRecord[]>
+  // ---- auth tokens (opaque bearer session) ----
+  createToken(token: string, parentId: string): Promise<void>
+  /** resolve a bearer token to its parent id (and bump last-seen), or null. */
+  parentIdForToken(token: string): Promise<string | null>
+  deleteToken(token: string): Promise<void>
+  // ---- cross-device login codes (phone → one-time code) ----
+  putLoginCode(phone: string, code: string, expiresAt: number): Promise<void>
+  getLoginCode(phone: string): Promise<{ code: string; expiresAt: number; attempts: number } | null>
+  incLoginAttempt(phone: string): Promise<void>
+  clearLoginCode(phone: string): Promise<void>
+  upsertChild(c: ChildRecord): Promise<void>
+  getChild(id: string): Promise<ChildRecord | null>
+  addSession(s: SessionEvent): Promise<void>
+  addAnswers(a: AnswerEvent[]): Promise<void>
+  addExamResult(e: ExamResult): Promise<void>
+  addPrediction(p: Prediction): Promise<string>
+  getPredictions(childId: string): Promise<Prediction[]>
+  getExamResults(childId: string): Promise<ExamResult[]>
+  /** All predictions/exams across every child — for the cross-cohort accuracy stat. */
+  allPredictions(): Promise<Prediction[]>
+  allExamResults(): Promise<ExamResult[]>
   /** everything the engine needs for one child, as of `asOf`. */
-  getEngineInput(childId: string, asOf: number): EngineInput
-  close(): void
+  getEngineInput(childId: string, asOf: number): Promise<EngineInput>
+  // ---- RAG corpus ----
+  upsertChunks(chunks: RagChunk[]): Promise<void>
+  /** chunks matching the metadata filter (embeddings included, ranked in JS). */
+  getChunks(filter: ChunkFilter): Promise<RagChunk[]>
+  countChunks(): Promise<number>
+  close(): Promise<void>
+}
+
+/** The backend a Store speaks to — surfaced on /api/health. */
+export type StoreKind = 'sqlite' | 'postgres'
+
+/** A syllabus/textbook passage + its embedding, for retrieval-augmented gen. */
+export interface RagChunk {
+  id: string
+  board: string
+  klass: number
+  subject: string
+  chapter: string
+  source: string
+  content: string
+  embedding: number[]
+}
+export interface ChunkFilter {
+  board?: string
+  klass?: number
+  subject?: string
+  chapter?: string
 }
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS parents (
-  id TEXT PRIMARY KEY, name TEXT NOT NULL, phone TEXT, created_at INTEGER
+  id TEXT PRIMARY KEY, name TEXT NOT NULL, phone TEXT, link_channel TEXT, claimed INTEGER, plan TEXT, created_at INTEGER
 );
+CREATE TABLE IF NOT EXISTS auth_tokens (
+  token TEXT PRIMARY KEY, parent_id TEXT NOT NULL, created_at INTEGER, last_seen INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_tokens_parent ON auth_tokens(parent_id);
+CREATE TABLE IF NOT EXISTS login_codes (
+  phone TEXT PRIMARY KEY, code TEXT NOT NULL, expires_at INTEGER, attempts INTEGER, created_at INTEGER
+);
+CREATE TABLE IF NOT EXISTS rag_chunks (
+  id TEXT PRIMARY KEY, board TEXT, klass INTEGER, subject TEXT, chapter TEXT,
+  source TEXT, content TEXT, embedding TEXT, created_at INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_rag_meta ON rag_chunks(board, klass, subject, chapter);
 CREATE TABLE IF NOT EXISTS children (
   id TEXT PRIMARY KEY, parent_id TEXT, name TEXT NOT NULL, board TEXT, klass INTEGER,
   subjects TEXT, monthly_spend INTEGER, created_at INTEGER
@@ -75,6 +146,9 @@ export class SqliteStore implements Store {
   constructor(path: string) {
     this.db = new Database(path)
     this.db.pragma('journal_mode = WAL')
+  }
+
+  async init(): Promise<void> {
     this.db.exec(SCHEMA)
     // migration for DBs created before `subject` existed on exams
     try {
@@ -82,23 +156,148 @@ export class SqliteStore implements Store {
     } catch {
       /* column already present */
     }
+    // migration for DBs created before parents tracked how they linked
+    try {
+      this.db.exec('ALTER TABLE parents ADD COLUMN link_channel TEXT')
+    } catch {
+      /* column already present */
+    }
+    // migration for DBs created before the guest/claimed distinction
+    try {
+      this.db.exec('ALTER TABLE parents ADD COLUMN claimed INTEGER')
+    } catch {
+      /* column already present */
+    }
+    // migration for DBs created before subscription plans
+    try {
+      this.db.exec('ALTER TABLE parents ADD COLUMN plan TEXT')
+    } catch {
+      /* column already present */
+    }
   }
 
-  isEmpty(): boolean {
+  async isEmpty(): Promise<boolean> {
     const row = this.db.prepare('SELECT COUNT(*) AS n FROM children').get() as { n: number }
     return row.n === 0
   }
 
-  upsertParent(p: ParentRecord): void {
+  async upsertParent(p: ParentRecord): Promise<void> {
     this.db
       .prepare(
-        `INSERT INTO parents (id, name, phone, created_at) VALUES (@id, @name, @phone, @createdAt)
-         ON CONFLICT(id) DO UPDATE SET name=@name, phone=@phone`,
+        `INSERT INTO parents (id, name, phone, link_channel, claimed, created_at)
+         VALUES (@id, @name, @phone, @channel, @claimed, @createdAt)
+         ON CONFLICT(id) DO UPDATE SET name=@name,
+           phone=CASE WHEN @phone != '' THEN @phone ELSE parents.phone END,
+           link_channel=@channel,
+           claimed=CASE WHEN @claimed=1 THEN 1 ELSE parents.claimed END`,
       )
-      .run({ ...p, createdAt: Date.now() })
+      .run({ ...p, channel: p.channel ?? 'manual', claimed: p.claimed ? 1 : 0, createdAt: Date.now() })
   }
 
-  upsertChild(c: ChildRecord): void {
+  async createParent(p: ParentRecord): Promise<void> {
+    this.db
+      .prepare(
+        `INSERT INTO parents (id, name, phone, link_channel, claimed, created_at)
+         VALUES (@id, @name, @phone, @channel, @claimed, @createdAt)`,
+      )
+      .run({ ...p, channel: p.channel ?? 'manual', claimed: p.claimed ? 1 : 0, createdAt: Date.now() })
+  }
+
+  private rowToParent(r: Record<string, unknown> | undefined): ParentRecord | null {
+    if (!r) return null
+    return {
+      id: r.id as string,
+      name: (r.name as string) ?? '',
+      phone: (r.phone as string) ?? '',
+      channel: (r.link_channel as string) ?? 'manual',
+      claimed: !!r.claimed,
+      plan: (r.plan as string) ?? 'free',
+    }
+  }
+
+  async setPlan(id: string, plan: string): Promise<void> {
+    this.db.prepare('UPDATE parents SET plan = ? WHERE id = ?').run(plan, id)
+  }
+
+  async getParent(id: string): Promise<ParentRecord | null> {
+    return this.rowToParent(this.db.prepare('SELECT * FROM parents WHERE id = ?').get(id) as Record<string, unknown> | undefined)
+  }
+
+  async getParentByPhone(phone: string): Promise<ParentRecord | null> {
+    if (!phone) return null
+    return this.rowToParent(
+      this.db.prepare('SELECT * FROM parents WHERE phone = ? AND phone != \'\' ORDER BY created_at LIMIT 1').get(phone) as
+        | Record<string, unknown>
+        | undefined,
+    )
+  }
+
+  async deleteParent(id: string): Promise<void> {
+    const tx = this.db.transaction((pid: string) => {
+      const kids = 'SELECT id FROM children WHERE parent_id = ?'
+      this.db.prepare(`DELETE FROM answers WHERE child_id IN (${kids})`).run(pid)
+      this.db.prepare(`DELETE FROM sessions WHERE child_id IN (${kids})`).run(pid)
+      this.db.prepare(`DELETE FROM exams WHERE child_id IN (${kids})`).run(pid)
+      this.db.prepare(`DELETE FROM predictions WHERE child_id IN (${kids})`).run(pid)
+      this.db.prepare('DELETE FROM login_codes WHERE phone = (SELECT phone FROM parents WHERE id = ?)').run(pid)
+      this.db.prepare('DELETE FROM children WHERE parent_id = ?').run(pid)
+      this.db.prepare('DELETE FROM auth_tokens WHERE parent_id = ?').run(pid)
+      this.db.prepare('DELETE FROM parents WHERE id = ?').run(pid)
+    })
+    tx(id)
+  }
+
+  async getChildrenForParent(parentId: string): Promise<ChildRecord[]> {
+    const rows = this.db.prepare('SELECT * FROM children WHERE parent_id = ? ORDER BY created_at').all(parentId) as Record<string, unknown>[]
+    return rows.map((r) => ({
+      id: r.id as string,
+      parentId: (r.parent_id as string) ?? '',
+      name: r.name as string,
+      board: (r.board as string) ?? 'CBSE',
+      klass: (r.klass as number) ?? 10,
+      subjects: JSON.parse((r.subjects as string) || '[]'),
+      monthlySpend: (r.monthly_spend as number) ?? 0,
+    }))
+  }
+
+  async createToken(token: string, parentId: string): Promise<void> {
+    const now = Date.now()
+    this.db.prepare('INSERT INTO auth_tokens (token, parent_id, created_at, last_seen) VALUES (?, ?, ?, ?)').run(token, parentId, now, now)
+  }
+
+  async parentIdForToken(token: string): Promise<string | null> {
+    const row = this.db.prepare('SELECT parent_id FROM auth_tokens WHERE token = ?').get(token) as { parent_id: string } | undefined
+    if (!row) return null
+    this.db.prepare('UPDATE auth_tokens SET last_seen = ? WHERE token = ?').run(Date.now(), token)
+    return row.parent_id
+  }
+
+  async deleteToken(token: string): Promise<void> {
+    this.db.prepare('DELETE FROM auth_tokens WHERE token = ?').run(token)
+  }
+
+  async putLoginCode(phone: string, code: string, expiresAt: number): Promise<void> {
+    this.db
+      .prepare('INSERT OR REPLACE INTO login_codes (phone, code, expires_at, attempts, created_at) VALUES (?, ?, ?, 0, ?)')
+      .run(phone, code, expiresAt, Date.now())
+  }
+
+  async getLoginCode(phone: string): Promise<{ code: string; expiresAt: number; attempts: number } | null> {
+    const r = this.db.prepare('SELECT code, expires_at, attempts FROM login_codes WHERE phone = ?').get(phone) as
+      | { code: string; expires_at: number; attempts: number }
+      | undefined
+    return r ? { code: r.code, expiresAt: r.expires_at, attempts: r.attempts ?? 0 } : null
+  }
+
+  async incLoginAttempt(phone: string): Promise<void> {
+    this.db.prepare('UPDATE login_codes SET attempts = attempts + 1 WHERE phone = ?').run(phone)
+  }
+
+  async clearLoginCode(phone: string): Promise<void> {
+    this.db.prepare('DELETE FROM login_codes WHERE phone = ?').run(phone)
+  }
+
+  async upsertChild(c: ChildRecord): Promise<void> {
     this.db
       .prepare(
         `INSERT INTO children (id, parent_id, name, board, klass, subjects, monthly_spend, created_at)
@@ -108,7 +307,7 @@ export class SqliteStore implements Store {
       .run({ ...c, subjects: JSON.stringify(c.subjects), createdAt: Date.now() })
   }
 
-  getChild(id: string): ChildRecord | null {
+  async getChild(id: string): Promise<ChildRecord | null> {
     const r = this.db.prepare('SELECT * FROM children WHERE id = ?').get(id) as
       | Record<string, unknown>
       | undefined
@@ -124,7 +323,7 @@ export class SqliteStore implements Store {
     }
   }
 
-  addSession(s: SessionEvent): void {
+  async addSession(s: SessionEvent): Promise<void> {
     this.db
       .prepare(
         `INSERT OR REPLACE INTO sessions (id, child_id, type, assigned_at, completed, abandoned_at_q, created_at)
@@ -141,7 +340,7 @@ export class SqliteStore implements Store {
       })
   }
 
-  addAnswers(answers: AnswerEvent[]): void {
+  async addAnswers(answers: AnswerEvent[]): Promise<void> {
     const stmt = this.db.prepare(
       `INSERT OR REPLACE INTO answers
        (id, session_id, child_id, item_id, chapter, cog_level, format, item_difficulty, correct,
@@ -172,7 +371,7 @@ export class SqliteStore implements Store {
     insertMany(answers)
   }
 
-  addExamResult(e: ExamResult): void {
+  async addExamResult(e: ExamResult): Promise<void> {
     this.db
       .prepare(
         `INSERT INTO exams (id, child_id, subject, parent_entered_marks, exam_type, date)
@@ -181,7 +380,7 @@ export class SqliteStore implements Store {
       .run({ id: randomUUID(), childId: e.childId, subject: e.subject, marks: e.marks, examType: e.examType, date: e.date })
   }
 
-  addPrediction(p: Prediction): string {
+  async addPrediction(p: Prediction): Promise<string> {
     const id = p.id ?? randomUUID()
     this.db
       .prepare(
@@ -202,33 +401,24 @@ export class SqliteStore implements Store {
     return id
   }
 
-  getPredictions(childId: string): Prediction[] {
-    const rows = this.db.prepare('SELECT * FROM predictions WHERE child_id = ?').all(childId) as Record<string, unknown>[]
-    return rows.map((r) => ({
-      id: r.id as string,
-      childId: r.child_id as string,
-      subject: r.subject as string,
-      examType: r.exam_type as string,
-      point: r.point as number,
-      low: r.low as number,
-      high: r.high as number,
-      basisReadiness: r.basis_readiness as number,
-      madeAt: r.made_at as number,
-    }))
+  async getPredictions(childId: string): Promise<Prediction[]> {
+    return (this.db.prepare('SELECT * FROM predictions WHERE child_id = ?').all(childId) as Record<string, unknown>[]).map(rowToPrediction)
   }
 
-  getExamResults(childId: string): ExamResult[] {
+  async getExamResults(childId: string): Promise<ExamResult[]> {
     const rows = this.db.prepare('SELECT * FROM exams WHERE child_id = ?').all(childId) as Record<string, unknown>[]
-    return rows.map((r) => ({
-      childId: r.child_id as string,
-      subject: (r.subject as string) ?? 'Maths',
-      examType: r.exam_type as string,
-      marks: r.parent_entered_marks as number,
-      date: r.date as number,
-    }))
+    return rows.map(rowToExam)
   }
 
-  getEngineInput(childId: string, asOf: number): EngineInput {
+  async allPredictions(): Promise<Prediction[]> {
+    return (this.db.prepare('SELECT * FROM predictions').all() as Record<string, unknown>[]).map(rowToPrediction)
+  }
+
+  async allExamResults(): Promise<ExamResult[]> {
+    return (this.db.prepare('SELECT * FROM exams').all() as Record<string, unknown>[]).map(rowToExam)
+  }
+
+  async getEngineInput(childId: string, asOf: number): Promise<EngineInput> {
     const answerRows = this.db.prepare('SELECT * FROM answers WHERE child_id = ?').all(childId) as Record<string, unknown>[]
     const sessionRows = this.db.prepare('SELECT * FROM sessions WHERE child_id = ?').all(childId) as Record<string, unknown>[]
     const examRows = this.db.prepare('SELECT * FROM exams WHERE child_id = ?').all(childId) as Record<string, unknown>[]
@@ -266,7 +456,72 @@ export class SqliteStore implements Store {
     return { childId, asOf, answers, sessions, exams }
   }
 
-  close(): void {
+  async upsertChunks(chunks: RagChunk[]): Promise<void> {
+    const stmt = this.db.prepare(
+      `INSERT OR REPLACE INTO rag_chunks (id, board, klass, subject, chapter, source, content, embedding, created_at)
+       VALUES (@id, @board, @klass, @subject, @chapter, @source, @content, @embedding, @createdAt)`,
+    )
+    const many = this.db.transaction((rows: RagChunk[]) => {
+      for (const ch of rows) stmt.run({ ...ch, embedding: JSON.stringify(ch.embedding), createdAt: Date.now() })
+    })
+    many(chunks)
+  }
+
+  async getChunks(filter: ChunkFilter): Promise<RagChunk[]> {
+    const cond: string[] = []
+    const params: Record<string, unknown> = {}
+    if (filter.board) (cond.push('board = @board'), (params.board = filter.board))
+    if (filter.klass != null) (cond.push('klass = @klass'), (params.klass = filter.klass))
+    if (filter.subject) (cond.push('subject = @subject'), (params.subject = filter.subject))
+    if (filter.chapter) (cond.push('chapter = @chapter'), (params.chapter = filter.chapter))
+    const where = cond.length ? `WHERE ${cond.join(' AND ')}` : ''
+    const rows = this.db.prepare(`SELECT * FROM rag_chunks ${where}`).all(params) as Record<string, unknown>[]
+    return rows.map(rowToChunk)
+  }
+
+  async countChunks(): Promise<number> {
+    return (this.db.prepare('SELECT COUNT(*) AS n FROM rag_chunks').get() as { n: number }).n
+  }
+
+  async close(): Promise<void> {
     this.db.close()
+  }
+}
+
+export function rowToPrediction(r: Record<string, unknown>): Prediction {
+  return {
+    id: r.id as string,
+    childId: r.child_id as string,
+    subject: r.subject as string,
+    examType: r.exam_type as string,
+    point: r.point as number,
+    low: r.low as number,
+    high: r.high as number,
+    basisReadiness: r.basis_readiness as number,
+    madeAt: r.made_at as number,
+  }
+}
+
+export function rowToExam(r: Record<string, unknown>): ExamResult {
+  return {
+    childId: r.child_id as string,
+    subject: (r.subject as string) ?? 'Maths',
+    examType: r.exam_type as string,
+    marks: r.parent_entered_marks as number,
+    date: r.date as number,
+  }
+}
+
+/** Shared row → RagChunk (embedding stored as JSON text in both backends). */
+export function rowToChunk(r: Record<string, unknown>): RagChunk {
+  return {
+    id: r.id as string,
+    board: (r.board as string) ?? '',
+    klass: (r.klass as number) ?? 0,
+    subject: (r.subject as string) ?? '',
+    chapter: (r.chapter as string) ?? '',
+    source: (r.source as string) ?? '',
+    content: (r.content as string) ?? '',
+    embedding: JSON.parse((r.embedding as string) || '[]'),
   }
 }

@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import PhoneFrame from '../components/PhoneFrame'
-import BottomNav from '../components/BottomNav'
+import AppShell from '../components/AppShell'
 import { useApp } from '../state/AppContext'
 import type { Rating, RatingKey } from '../engine'
 import { renderCard } from '../api/card'
@@ -125,12 +124,8 @@ export default function Tracker() {
   }, [headline?.metric])
 
   return (
-    <PhoneFrame
-      bg={c.home}
-      time="7:36"
-      contentStyle={{ padding: '16px 20px 86px', color: c.ink }}
-      footer={<BottomNav active="progress" />}
-    >
+    <AppShell active="progress">
+     <div style={{ maxWidth: 720, margin: '0 auto', color: c.ink }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
         <div>
           <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', color: c.ink3 }}>
@@ -263,7 +258,8 @@ export default function Tracker() {
       >
         See the September Term Audit →
       </button>
-    </PhoneFrame>
+     </div>
+    </AppShell>
   )
 }
 

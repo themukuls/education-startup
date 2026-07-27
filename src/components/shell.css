@@ -1,0 +1,121 @@
+/* ===== Responsive app shell =====
+   Phone: single column + fixed bottom nav (no fake device chrome).
+   Desktop (>=960px): persistent left sidebar + wide, centred content. */
+
+.pp-app {
+  position: relative;
+  min-height: 100dvh;
+  background: #f4efe6;
+}
+
+.pp-main {
+  min-height: 100dvh;
+}
+
+.pp-mainwrap {
+  width: 100%;
+  max-width: 1160px;
+  margin: 0 auto;
+  padding: 20px 18px calc(84px + env(safe-area-inset-bottom, 0px));
+}
+
+/* ---- Sidebar (desktop only) ---- */
+.pp-sidebar {
+  display: none;
+}
+
+/* ---- Bottom nav (phone only) ---- */
+.pp-bottomnav {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 64px;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  background: #fff;
+  border-top: 1px solid #eae3d8;
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  z-index: 30;
+}
+.pp-tab {
+  background: none;
+  border: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  min-width: 56px;
+}
+.pp-tab-label {
+  font-size: 10.5px;
+  font-weight: 700;
+}
+
+@media (min-width: 960px) {
+  .pp-app {
+    display: grid;
+    grid-template-columns: 256px 1fr;
+  }
+  .pp-bottomnav {
+    display: none;
+  }
+  .pp-sidebar {
+    display: flex;
+    flex-direction: column;
+    position: sticky;
+    top: 0;
+    height: 100dvh;
+    padding: 26px 18px 22px;
+    background: #fbf8f2;
+    border-right: 1px solid #eae3d8;
+  }
+  .pp-side-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 26px;
+  }
+  .pp-side-link {
+    display: flex;
+    align-items: center;
+    gap: 13px;
+    padding: 11px 13px;
+    border-radius: 13px;
+    border: none;
+    background: none;
+    font: inherit;
+    font-size: 14.5px;
+    font-weight: 700;
+    color: #5e574b;
+    text-align: left;
+    width: 100%;
+    transition: background 0.15s;
+  }
+  .pp-side-link:hover {
+    background: #f0eadd;
+  }
+  .pp-side-link.active {
+    background: #e6ecfa;
+    color: #2354c7;
+  }
+  .pp-mainwrap {
+    padding: 36px 44px 56px;
+  }
+}
+
+/* Reusable content grid used by dashboards: reflows to one column on phone. */
+.pp-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+}
+@media (min-width: 960px) {
+  .pp-grid-2 {
+    grid-template-columns: 1.7fr 1fr;
+    gap: 22px;
+    align-items: start;
+  }
+}

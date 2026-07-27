@@ -58,6 +58,46 @@ function buildBody(to: string, message: string, card: CardCopy) {
   return { messaging_product: 'whatsapp', to, type: 'text', text: { body: message, preview_url: true } }
 }
 
+/**
+ * Send a login OTP via WhatsApp. Uses an approved AUTHENTICATION template when
+ * WHATSAPP_OTP_TEMPLATE is set (required for business-initiated OTP), else a
+ * plain text message (only delivers inside a 24h window). Mock-safe: returns
+ * 'mock' without creds so cross-device login stays testable via devCode.
+ */
+export async function sendOtp(phone: string, code: string): Promise<{ status: SendStatus; error?: string }> {
+  if (!hasWhatsApp()) return { status: 'mock' }
+  const to = normalizePhone(phone)
+  if (!to) return { status: 'error', error: 'no recipient phone number' }
+  const template = process.env.WHATSAPP_OTP_TEMPLATE
+  const body = template
+    ? {
+        messaging_product: 'whatsapp',
+        to,
+        type: 'template',
+        template: {
+          name: template,
+          language: { code: process.env.WHATSAPP_LANG ?? 'en' },
+          components: [{ type: 'body', parameters: [{ type: 'text', text: code }] }],
+        },
+      }
+    : { messaging_product: 'whatsapp', to, type: 'text', text: { body: `Your ParentProof code is ${code}. It expires in 10 minutes.` } }
+  try {
+    const version = process.env.WHATSAPP_API_VERSION ?? 'v21.0'
+    const res = await fetch(`https://graph.facebook.com/${version}/${process.env.WHATSAPP_PHONE_ID}/messages`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`, 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    if (!res.ok) {
+      const data = (await res.json().catch(() => ({}))) as { error?: { message?: string } }
+      return { status: 'error', error: data.error?.message ?? `HTTP ${res.status}` }
+    }
+    return { status: 'sent' }
+  } catch (err) {
+    return { status: 'error', error: err instanceof Error ? err.message : 'send failed' }
+  }
+}
+
 export async function sendCard({ card, ctx, phone }: SendInput): Promise<SendResult> {
   const message = formatCardMessage(card, ctx)
   const waLink = waShareLink(message, phone)

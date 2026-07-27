@@ -1,11 +1,8 @@
 import { useEffect, useState } from 'react'
-import PhoneFrame from '../components/PhoneFrame'
-import BottomNav from '../components/BottomNav'
+import AppShell from '../components/AppShell'
 import { useApp } from '../state/AppContext'
-import { fetchAccuracy, enterMarks, type AccuracyPayload } from '../api/accuracy'
+import { fetchAccuracy, enterMarks, fetchAggregateAccuracy, type AccuracyPayload, type AggregateAccuracy } from '../api/accuracy'
 import { c, serif } from '../theme'
-
-const CHILD_ID = 'mukul'
 
 const EXAM_LABEL: Record<string, string> = {
   school_ut: 'Unit test',
@@ -18,18 +15,30 @@ const EXAM_TYPES = ['school_ut', 'midterm', 'preboard', 'board']
 // Prediction vs. actual — the trust ritual. Every school exam, the parent
 // enters real marks; we check the prediction we ACTUALLY made, misses included.
 export default function Accuracy() {
-  const { child } = useApp()
+  const { child, childId } = useApp()
   const [data, setData] = useState<AccuracyPayload | null>(null)
   const [subject, setSubject] = useState(child.subjects[0] ?? 'Maths')
   const [examType, setExamType] = useState('school_ut')
   const [marks, setMarks] = useState('')
   const [saving, setSaving] = useState(false)
+  const [agg, setAgg] = useState<AggregateAccuracy | null>(null)
+
+  useEffect(() => {
+    if (!childId) return
+    let alive = true
+    fetchAccuracy(childId)
+      .then((d) => alive && setData(d))
+      .catch(() => alive && setData(null))
+    return () => {
+      alive = false
+    }
+  }, [childId])
 
   useEffect(() => {
     let alive = true
-    fetchAccuracy(CHILD_ID)
-      .then((d) => alive && setData(d))
-      .catch(() => alive && setData(null))
+    fetchAggregateAccuracy()
+      .then((a) => alive && setAgg(a))
+      .catch(() => {})
     return () => {
       alive = false
     }
@@ -37,10 +46,10 @@ export default function Accuracy() {
 
   async function submit() {
     const n = Number(marks)
-    if (!Number.isFinite(n) || n < 0 || n > 100) return
+    if (!Number.isFinite(n) || n < 0 || n > 100 || !childId) return
     setSaving(true)
     try {
-      const updated = await enterMarks(CHILD_ID, subject, examType, n)
+      const updated = await enterMarks(childId, subject, examType, n)
       setData(updated)
       setMarks('')
     } catch {
@@ -54,7 +63,8 @@ export default function Accuracy() {
   const hasRecord = !!stats && stats.n > 0
 
   return (
-    <PhoneFrame bg={c.home} time="7:38" contentStyle={{ padding: '16px 20px 86px', color: c.ink }} footer={<BottomNav active="progress" />}>
+    <AppShell active="accuracy">
+     <div style={{ maxWidth: 720, margin: '0 auto', color: c.ink }}>
       <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', color: c.amberDeep, marginBottom: 4 }}>
         The trust ritual
       </div>
@@ -177,7 +187,18 @@ export default function Accuracy() {
           We compare it to the prediction we already made — and show you if we were wrong.
         </p>
       </div>
-    </PhoneFrame>
+
+      {/* Cross-cohort social proof */}
+      {agg && agg.predictions > 0 && (
+        <div style={{ marginTop: 14, background: c.blueWash, border: `1px solid ${c.blueBorder}`, borderRadius: 16, padding: '15px 18px', display: 'flex', alignItems: 'center', gap: 14 }}>
+          <div style={{ fontFamily: serif, fontSize: 30, fontWeight: 700, color: c.blue, lineHeight: 1 }}>{agg.within8Pct}%</div>
+          <div style={{ fontSize: 13, color: c.blueDeep, fontWeight: 600, lineHeight: 1.4 }}>
+            Across <b>{agg.children}</b> {agg.children === 1 ? 'child' : 'children'} and <b>{agg.predictions}</b> predictions, ParentProof has landed within ±8 points {agg.within8Pct}% of the time.
+          </div>
+        </div>
+      )}
+     </div>
+    </AppShell>
   )
 }
 

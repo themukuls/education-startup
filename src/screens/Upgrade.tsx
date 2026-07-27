@@ -1,12 +1,37 @@
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import PhoneFrame from '../components/PhoneFrame'
 import { useApp } from '../state/AppContext'
+import { pay, type Plan } from '../api/payment'
 import { c, serif } from '../theme'
 
 // Screen 12 — Upgrade (free audit ends). Loss aversion + endowment; anchored pricing.
 export default function Upgrade() {
   const nav = useNavigate()
-  const { child, accountStatus, openSaveGate } = useApp()
+  const { child, parentName, parentPhone, accountStatus, openSaveGate, markPlan } = useApp()
+  const [busy, setBusy] = useState<Plan | null>(null)
+
+  const buy = async (plan: Plan) => {
+    // guests must save their record (phone) before paying
+    if (accountStatus === 'guest') {
+      openSaveGate()
+      return
+    }
+    if (busy) return
+    setBusy(plan)
+    try {
+      await pay(plan, { name: parentName, contact: parentPhone })
+      markPlan(plan)
+      alert(`Welcome to ${plan === 'annual' ? 'Annual' : 'Core'} — ${child.name}’s record is safe.`)
+      nav('/home')
+    } catch (err) {
+      if (!(err instanceof Error && err.message === 'cancelled')) {
+        alert('Payment could not be completed. Please try again.')
+      }
+    } finally {
+      setBusy(null)
+    }
+  }
 
   return (
     <PhoneFrame time="7:40" contentStyle={{ padding: '18px 22px 24px', color: c.ink }}>
@@ -43,7 +68,7 @@ export default function Upgrade() {
           </div>
         </div>
         {/* Annual */}
-        <div style={{ border: `1.5px solid ${c.line3}`, background: c.white, borderRadius: 18, padding: '17px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div role="button" tabIndex={0} onClick={() => buy('annual')} onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && buy('annual')} style={{ cursor: 'pointer', border: `1.5px solid ${c.line3}`, background: c.white, borderRadius: 18, padding: '17px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', opacity: busy === 'annual' ? 0.6 : 1 }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
               <div style={{ fontSize: 16, fontWeight: 800 }}>Annual</div>
@@ -67,18 +92,11 @@ export default function Upgrade() {
       </div>
 
       <button
-        onClick={() => {
-          // guests must save their record (phone) before paying
-          if (accountStatus === 'guest') {
-            openSaveGate()
-            return
-          }
-          alert('Welcome to Core — ' + child.name + '’s record is safe.')
-          nav('/home')
-        }}
-        style={{ width: '100%', background: c.blue, color: '#fff', border: 'none', borderRadius: 16, padding: 19, fontSize: 16.5, fontWeight: 800, fontFamily: 'inherit', boxShadow: '0 10px 22px -8px rgba(35,84,199,.6)', marginTop: 16 }}
+        onClick={() => buy('core')}
+        disabled={busy !== null}
+        style={{ width: '100%', background: c.blue, color: '#fff', border: 'none', borderRadius: 16, padding: 19, fontSize: 16.5, fontWeight: 800, fontFamily: 'inherit', boxShadow: '0 10px 22px -8px rgba(35,84,199,.6)', marginTop: 16, opacity: busy ? 0.7 : 1 }}
       >
-        Keep {child.name}&apos;s record — ₹999
+        {busy === 'core' ? 'Opening checkout…' : `Keep ${child.name}’s record — ₹999`}
       </button>
       <p style={{ textAlign: 'center', fontSize: 12.5, color: c.ink3, margin: '12px 0 0', fontWeight: 600 }}>Cancel anytime · Your data stays yours · UPI / cards</p>
     </PhoneFrame>

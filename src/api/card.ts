@@ -2,6 +2,7 @@
 // own safe copy is the fallback, so the insight card renders even offline.
 
 import { fallbackCard, type CardCopy, type RenderRequest } from '../shared/card'
+import { llmHeaders } from './llm'
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? ''
 
@@ -9,9 +10,9 @@ export async function renderCard(req: RenderRequest): Promise<{ card: CardCopy; 
   try {
     const res = await fetch(`${API_BASE}/api/render-card`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', ...llmHeaders() },
       body: JSON.stringify(req),
-      signal: AbortSignal.timeout(30_000),
+      signal: AbortSignal.timeout(45_000),
     })
     if (!res.ok) throw new Error(`render failed: ${res.status}`)
     const data = await res.json()
