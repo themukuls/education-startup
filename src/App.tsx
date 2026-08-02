@@ -16,9 +16,11 @@ import Upgrade from './screens/Upgrade'
 import You from './screens/You'
 import DevLlm from './screens/DevLlm'
 import Login from './screens/Login'
+import InstallPrompt from './components/InstallPrompt'
 
 export default function App() {
   return (
+    <>
     <Routes>
         <Route path="/" element={<Welcome />} />
         <Route path="/onboarding/child" element={<OnboardChild />} />
@@ -39,5 +41,9 @@ export default function App() {
         <Route path="/login" element={<Login />} />
         <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+    {/* PWA "add to home screen" nudge — self-gating, renders null until the
+        parent is on a post-audit route. Mounted once, globally. */}
+    <InstallPrompt />
+    </>
   )
 }

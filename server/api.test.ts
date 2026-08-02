@@ -36,7 +36,11 @@ async function mintToken(): Promise<string> {
 }
 
 beforeAll(async () => {
-  child = spawn('npx', ['tsx', 'server/index.ts'], {
+  // Run tsx's CLI directly with this Node binary rather than through `npx`:
+  // on Windows `npx` resolves to npx.cmd, which a bare spawn() can't launch
+  // (ENOENT), and that silently skipped this entire suite locally.
+  const tsxCli = join(process.cwd(), 'node_modules', 'tsx', 'dist', 'cli.mjs')
+  child = spawn(process.execPath, [tsxCli, 'server/index.ts'], {
     env: { ...process.env, PORT: String(PORT), DB_PATH, DATABASE_URL: '' },
     stdio: 'ignore',
   })

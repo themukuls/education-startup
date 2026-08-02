@@ -4,10 +4,31 @@ import { useApp } from '../state/AppContext'
 import { c, serif } from '../theme'
 
 // Screen 06 — Kid finish (peak-end). Strong finisher + competence signal.
+// Every claim here is measured: the answered count comes from the run that just
+// finished, and the pace/trend card only appears when the engine actually has
+// the data to back it. Never "you improved" on a first test.
 export default function KidComplete() {
   const nav = useNavigate()
-  const { child, answered } = useApp()
-  const total = answered || 9
+  const { child, answered, report } = useApp()
+  const total = answered
+
+  // The one real trend we can measure across tests is readiness velocity, and
+  // it only exists once there's more than one test AND enough weeks of data.
+  const velocity = report.velocityPtsPerWeek
+  const climbing = report.testsTaken > 1 && velocity != null && velocity > 0
+  // Pace is a plain fact about this history ("About 41s per question") — not a
+  // comparison, so it's safe on test 1 as long as the engine says it has data.
+  const speed = report.ratings.speed
+
+  const signal = climbing
+    ? { icon: '⚡', title: 'You’re getting stronger week on week', sub: `+${velocity} readiness points a week` }
+    : speed.hasData
+      ? { icon: '⏱', title: 'Your working pace', sub: speed.evidence }
+      : {
+          icon: '✓',
+          title: report.testsTaken > 1 ? `That’s ${report.testsTaken} tests on the record` : 'That’s one test on the record',
+          sub: 'A few more and we can show you how you’re changing.',
+        }
 
   const confetti = [
     { top: 80, left: 60, w: 9, h: 9, bg: c.amber, r: 2, rot: 20 },
@@ -67,14 +88,16 @@ export default function KidComplete() {
         {child.name}!
       </h2>
       <p style={{ fontSize: 16, lineHeight: 1.5, color: c.navySoft, margin: '0 0 28px', fontWeight: 500, maxWidth: 280 }}>
-        You gave every question a real shot. All {total} answered — no skips.
+        {total > 0
+          ? `You gave every question a real shot. All ${total} answered — no skips.`
+          : 'You gave every question a real shot.'}
       </p>
 
       <div style={{ width: '100%', background: 'rgba(255,255,255,.08)', border: '1px solid rgba(255,255,255,.14)', borderRadius: 18, padding: '18px 20px', display: 'flex', alignItems: 'center', gap: 16, marginBottom: 'auto' }}>
-        <div style={{ width: 46, height: 46, borderRadius: 12, background: c.blueLight, display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 'none', fontSize: 22 }}>⚡</div>
+        <div style={{ width: 46, height: 46, borderRadius: 12, background: c.blueLight, display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 'none', fontSize: 22 }}>{signal.icon}</div>
         <div style={{ textAlign: 'left' }}>
-          <div style={{ fontSize: 15, fontWeight: 800, color: '#fff' }}>You were faster than last week</div>
-          <div style={{ fontSize: 13, color: c.navyMute, fontWeight: 600 }}>Avg 48s → 41s per question</div>
+          <div style={{ fontSize: 15, fontWeight: 800, color: '#fff' }}>{signal.title}</div>
+          <div style={{ fontSize: 13, color: c.navyMute, fontWeight: 600 }}>{signal.sub}</div>
         </div>
       </div>
 

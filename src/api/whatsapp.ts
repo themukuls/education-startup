@@ -4,6 +4,7 @@
 
 import { formatCardMessage, waShareLink, type CardContext } from '../shared/whatsapp'
 import type { CardCopy } from '../shared/card'
+import { authHeaders } from './auth'
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? ''
 
@@ -21,7 +22,7 @@ export async function deliverCard(
 ): Promise<DeliverResult> {
   const res = await fetch(`${API_BASE}/api/send-card`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', ...authHeaders() },
     body: JSON.stringify({ card, ...ctx }),
     signal: AbortSignal.timeout(20_000),
   })

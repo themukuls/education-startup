@@ -59,8 +59,9 @@ export default function Welcome() {
             </div>
           </div>
 
-          {/* sample diagnosis card visual */}
-          <SampleCard isDesktop={isDesktop} childName={child.name || 'Aarav'} />
+          {/* Illustrative sample only — never personalised with the real child's
+              name, or invented findings would read as claims about their kid. */}
+          <SampleCard isDesktop={isDesktop} />
         </div>
       </section>
 
@@ -137,13 +138,16 @@ const STEPS = [
   { title: 'A 15-min/day fix, then a re-test', body: 'A specific plan for the gap, and a scheduled re-test that proves whether it actually closed.' },
 ]
 
-function SampleCard({ isDesktop, childName }: { isDesktop: boolean; childName: string }) {
+function SampleCard({ isDesktop }: { isDesktop: boolean }) {
   return (
     <div style={{ background: 'linear-gradient(150deg,#1E1B16,#2A251C)', borderRadius: 24, padding: isDesktop ? '26px 26px 28px' : '22px', color: c.cream, position: 'relative', overflow: 'hidden', boxShadow: '0 30px 60px -25px rgba(40,33,22,.5)', maxWidth: isDesktop ? 'none' : 440, margin: isDesktop ? 0 : '0 auto', width: '100%' }}>
       <div style={{ position: 'absolute', top: -24, right: -24, width: 130, height: 130, border: '1px solid #E0A02033', borderRadius: '50%' }} />
+      <div style={{ position: 'absolute', top: 16, right: 18, background: 'rgba(243,238,228,.14)', color: c.creamMute, fontSize: 10, fontWeight: 800, letterSpacing: '.1em', padding: '3px 8px', borderRadius: 8 }}>
+        SAMPLE
+      </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div>
-          <div style={{ fontSize: 12, fontWeight: 700, color: c.creamMute }}>{childName} · Class 10 CBSE</div>
+          <div style={{ fontSize: 12, fontWeight: 700, color: c.creamMute }}>Aarav · Class 10 CBSE</div>
           <div style={{ fontFamily: serif, fontSize: 22, fontWeight: 500, marginTop: 2 }}>Maths — Quadratics</div>
         </div>
         <div style={{ textAlign: 'right' }}>

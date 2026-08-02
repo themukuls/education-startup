@@ -33,3 +33,9 @@ services:
         sync: false
       - key: WHATSAPP_PHONE_ID
         sync: false
+      - key: WHATSAPP_APP_SECRET # required: unset skips the inbound webhook HMAC check
+        sync: false
+      - key: WHATSAPP_VERIFY_TOKEN # your own string, echoed in Meta's webhook handshake
+        sync: false
+      - key: ADMIN_SECRET # guards POST /api/rag/ingest via the x-admin-secret header
+        sync: false

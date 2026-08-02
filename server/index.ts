@@ -3,7 +3,7 @@
 
 import express from 'express'
 import cors from 'cors'
-import { randomUUID, randomInt } from 'node:crypto'
+import { randomUUID, randomInt, timingSafeEqual } from 'node:crypto'
 import { generateTest } from './generate.ts'
 import { renderCard } from './render.ts'
 import { sendCard, sendOtp, hasWhatsApp } from './whatsapp.ts'
@@ -43,7 +43,10 @@ app.get('/api/health', (_req, res) => {
   })
 })
 
-app.post('/api/generate-test', async (req, res) => {
+// Authenticated + rate-limited: every call can spend real LLM tokens, so an open
+// route is an open budget. The limit is per-IP per-minute, well above what one
+// child taking a test needs.
+app.post('/api/generate-test', requireAuth, rateLimit({ windowMs: 60_000, max: 10, name: 'generate' }), async (req, res) => {
   const b = req.body ?? {}
   const request: GenerateRequest = {
     board: String(b.board ?? 'CBSE'),
@@ -87,7 +90,8 @@ app.post('/api/generate-test', async (req, res) => {
   }
 })
 
-app.post('/api/render-card', async (req, res) => {
+// Same reasoning as /api/generate-test — a second LLM call on the paid key.
+app.post('/api/render-card', requireAuth, rateLimit({ windowMs: 60_000, max: 20, name: 'render' }), async (req, res) => {
   const b = req.body ?? {}
   const request: RenderRequest = {
     childName: String(b.childName ?? 'your child'),
@@ -332,8 +336,22 @@ app.get('/api/rag/search', async (req, res) => {
   res.json({ hits: hits.map((h) => ({ score: Number(h.score.toFixed(4)), chapter: h.chunk.chapter, source: h.chunk.source, content: h.chunk.content })) })
 })
 
-// Ingest syllabus/textbook material (admin).
+/** Constant-time compare of the x-admin-secret header against ADMIN_SECRET. */
+function adminSecretOk(secret: string, header: string | undefined): boolean {
+  const a = Buffer.from(header ?? '')
+  const b = Buffer.from(secret)
+  return a.length === b.length && timingSafeEqual(a, b)
+}
+
+// Ingest syllabus/textbook material (admin). Gated on a shared secret rather
+// than a parent token: this writes the corpus every generated question is
+// grounded in, so it's an operator action, not a user one.
 app.post('/api/rag/ingest', async (req, res) => {
+  const secret = process.env.ADMIN_SECRET
+  // Unconfigured means CLOSED, not open — an ingest route that falls open lets
+  // anyone poison the grounding corpus that reaches children's tests.
+  if (!secret) return res.status(503).json({ error: 'ingest disabled — ADMIN_SECRET not configured' })
+  if (!adminSecretOk(secret, req.header('x-admin-secret'))) return res.status(401).json({ error: 'invalid admin secret' })
   const docs = Array.isArray((req.body ?? {}).docs) ? ((req.body.docs as unknown[]) as RawDoc[]) : []
   if (!docs.length) return res.status(400).json({ error: 'docs[] required' })
   try {
@@ -426,6 +444,20 @@ app.post('/api/account', requireAuth, async (req, res) => {
 })
 
 // ---- WhatsApp inbound webhook: verify-by-message (no OTP) --------------------
+
+// Meta's one-time verification handshake. It GETs this URL when you register the
+// webhook and delivers no POSTs at all until we echo hub.challenge back verbatim
+// as plain text. With no WHATSAPP_VERIFY_TOKEN there is nothing to prove this
+// endpoint is ours, so refuse — an unconfigured server must not be claimable.
+app.get('/api/whatsapp/inbound', (req, res) => {
+  const verifyToken = process.env.WHATSAPP_VERIFY_TOKEN
+  if (!verifyToken) return res.status(403).json({ error: 'verification not configured' })
+  if (req.query['hub.mode'] !== 'subscribe' || req.query['hub.verify_token'] !== verifyToken) {
+    return res.status(403).json({ error: 'verification failed' })
+  }
+  res.type('text/plain').send(String(req.query['hub.challenge'] ?? ''))
+})
+
 // Where the "log in with WhatsApp" loop closes. When a parent sends our Business
 // number the linking message, Meta POSTs it here. WhatsApp has already verified
 // the sender, so `from` is a trusted number and `[code]` ties it to the guest
@@ -537,7 +569,9 @@ app.post('/api/exams', requireAuth, async (req, res) => {
   res.json(await accuracyPayload(childId))
 })
 
-app.post('/api/send-card', async (req, res) => {
+// Authenticated: with WhatsApp credentials set this sends a real message from
+// our Business number to any phone number in the body — never leave it open.
+app.post('/api/send-card', requireAuth, async (req, res) => {
   const b = req.body ?? {}
   const card = b.card as CardCopy | undefined
   if (!card?.headline || !card?.body || !card?.actionTonight) {

@@ -4,6 +4,7 @@
 
 import { auditQuestions } from '../data/testQuestions'
 import type { Question } from '../shared/quiz'
+import { authHeaders } from './auth'
 import { llmHeaders } from './llm'
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? ''
@@ -24,7 +25,7 @@ export interface TestResult {
 export async function fetchGeneratedTest(p: TestParams): Promise<TestResult> {
   const res = await fetch(`${API_BASE}/api/generate-test`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json', ...llmHeaders() },
+    headers: { 'content-type': 'application/json', ...authHeaders(), ...llmHeaders() },
     body: JSON.stringify({ ...p, count: p.count ?? 9 }),
     signal: AbortSignal.timeout(45_000),
   })

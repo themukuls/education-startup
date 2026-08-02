@@ -49,8 +49,17 @@ export interface AppState {
   parentPhone: string
   child: Child
   goal: Goal
+  /** Overall readiness %, mirrored from `report.readinessPct`. 0 before any test. */
   readiness: number
+  /** Readiness points per week, mirrored from `report.velocityPtsPerWeek`.
+   *  0 when velocity isn't measurable yet — read the report for the null. */
   weeklyDelta: number
+  /**
+   * Completed tests on the child's record (`report.testsTaken`). This is a
+   * COUNT OF SESSIONS, not a consecutive-weeks claim: the event stream has no
+   * notion of an "expected" week, so a real unbroken-streak number can't be
+   * derived. 0 for a new child.
+   */
   streak: number
   // last test run
   lastScore: number | null
@@ -126,9 +135,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [afterTestPrompted, setAfterTestPrompted] = useState(false)
   const [child, setChildState] = useState<Child>(defaultChild)
   const [goal, setGoal] = useState<Goal>('board')
-  const [readiness] = useState(68)
-  const [weeklyDelta] = useState(7)
-  const [streak] = useState(5)
   const [lastScore, setLastScore] = useState<number | null>(null)
   const [answered, setAnswered] = useState(0)
   const [childId, setChildId] = useState<string | null>(null)
@@ -142,6 +148,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [report, setReport] = useState<LearningReport>(() =>
     computeReport(buildStream({ archetype: 'improver', childId: 'demo', asOf: DEMO_ASOF, seed: 7 })),
   )
+
+  // Every headline number is derived from the report — never held as a constant.
+  // `streak` counts COMPLETED sessions (the engine's `testsTaken`); it is not a
+  // consecutive-week claim, because nothing in the event stream says which weeks
+  // a test was *expected*. A brand-new child therefore sees 0, which is true.
+  const streak = report.testsTaken
+  const readiness = report.readinessPct
+  const weeklyDelta = report.velocityPtsPerWeek ?? 0
 
   // On mount: ensure a session (mint an anonymous token if none), then adopt
   // THIS account's parent + first child from /api/me. Removes the hardcoded

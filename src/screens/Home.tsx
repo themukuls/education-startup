@@ -13,8 +13,20 @@ export default function Home() {
   const isDesktop = useIsDesktop()
   const [loadingDemo, setLoadingDemo] = useState(false)
   const keepRecord = () => (accountStatus === 'guest' ? openSaveGate() : nav('/upgrade'))
+
+  // Everything below is read off the report. There is no scheduler in this
+  // product, so nothing here names a day, a deadline or a "day N of M".
   const readiness = report.readinessPct
-  const weeklyDelta = Math.max(1, Math.round(report.velocityPtsPerWeek ?? 0))
+  const testsTaken = report.testsTaken
+  const hasHistory = testsTaken > 0
+  // null until the engine has enough weeks — we show no trend rather than a
+  // floor-clamped one (the old `Math.max(1, …)` invented a +1 every week).
+  const velocity = report.velocityPtsPerWeek
+  const band = report.velocityBand
+  const weakest = report.chapters[0] ?? null
+  const insight = report.headline
+  const weakestPct = weakest ? Math.round(weakest.readiness * 100) : 0
+  const NAME = (child.name || 'Your child').toUpperCase()
 
   // First run: the account has no child yet → onboard, or load demo data.
   if (accountReady && !childId) {
@@ -54,53 +66,94 @@ export default function Home() {
     )
   }
 
+  // Eyebrow + line follow the engine's velocity band, so we never tell a parent
+  // their child is improving when the data says otherwise (or says nothing).
+  const heroEyebrow = !hasHistory
+    ? `${NAME}'S RECORD —`
+    : band === 'rising'
+      ? `${NAME} IS IMPROVING —`
+      : band === 'slipping'
+        ? `${NAME} IS SLIPPING —`
+        : band === 'holding'
+          ? `${NAME} IS HOLDING STEADY —`
+          : `${NAME}'S RECORD —`
+  const heroLine = !hasHistory
+    ? 'the first test starts it.'
+    : band === 'rising'
+      ? 'and you’re the reason.'
+      : band === 'slipping'
+        ? 'this is where to step in.'
+        : band === 'holding'
+          ? 'keep the weekly rhythm going.'
+          : `measured from ${testsTaken} test${testsTaken === 1 ? '' : 's'}.`
+
   const hero = (
     <div style={{ background: 'linear-gradient(135deg,#2354C7,#163A8F)', borderRadius: 22, padding: isDesktop ? '26px 28px' : '20px 22px', color: '#EBEFFB', position: 'relative', overflow: 'hidden' }}>
       <div style={{ position: 'absolute', bottom: -30, right: -20, width: 140, height: 140, border: '1px solid rgba(255,255,255,.1)', borderRadius: '50%' }} />
-      <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: '.1em', color: c.blueInk }}>{child.name.toUpperCase()} IS IMPROVING —</div>
-      <p style={{ fontFamily: serif, fontSize: isDesktop ? 28 : 24, lineHeight: 1.15, margin: '6px 0 18px', fontWeight: 500 }}>and you&apos;re the reason.</p>
+      <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: '.1em', color: c.blueInk }}>{heroEyebrow}</div>
+      <p style={{ fontFamily: serif, fontSize: isDesktop ? 28 : 24, lineHeight: 1.15, margin: '6px 0 18px', fontWeight: 500 }}>{heroLine}</p>
       <div style={{ display: 'flex', alignItems: 'flex-end', gap: 16 }}>
         <div>
           <div style={{ fontFamily: serif, fontSize: isDesktop ? 52 : 40, fontWeight: 600, lineHeight: 1 }}>
-            {readiness}
-            <span style={{ fontSize: 22 }}>%</span>
+            {hasHistory ? readiness : '—'}
+            {hasHistory && <span style={{ fontSize: 22 }}>%</span>}
           </div>
           <div style={{ fontSize: 11, color: c.blueInk, fontWeight: 700, letterSpacing: '.04em' }}>READINESS</div>
         </div>
-        <div style={{ background: 'rgba(224,160,32,.22)', borderRadius: 20, padding: '6px 12px', marginBottom: 6 }}>
-          <span style={{ fontSize: 14, fontWeight: 800, color: '#F3D08A' }}>↑ +{weeklyDelta} this week</span>
-        </div>
+        {velocity != null && (
+          <div style={{ background: 'rgba(224,160,32,.22)', borderRadius: 20, padding: '6px 12px', marginBottom: 6 }}>
+            <span style={{ fontSize: 14, fontWeight: 800, color: '#F3D08A' }}>
+              {velocity > 0 ? '↑' : velocity < 0 ? '↓' : '→'} {velocity > 0 ? '+' : ''}{velocity} pts/week
+            </span>
+          </div>
+        )}
       </div>
     </div>
   )
 
+  // The "continue" card is the engine's chosen insight, with the weakest
+  // chapter as the fallback — the same source FixPlan.tsx uses. No dates.
+  const continueTitle =
+    insight?.headline ?? (weakest ? `${weakest.chapter} — the weakest chapter` : `Run ${child.name || 'your child'}’s first audit`)
+  const continueBody =
+    insight?.actionTonight ??
+    (weakest
+      ? `Sit with ${child.name} on ${weakest.chapter} — it's sitting at ${weakestPct}% ready.`
+      : `15 minutes of questions and you'll see exactly what's understood and what's only memorised.`)
+
   const continueCard = (
     <div>
-      <div style={sectionLabel}>Pick up where you left off</div>
+      <div style={sectionLabel}>{weakest ? 'Pick up where you left off' : 'Start here'}</div>
       <div style={{ background: c.white, border: `1.5px solid ${c.amber}`, borderRadius: 18, padding: '17px 18px', boxShadow: '0 8px 20px -12px rgba(224,160,32,.6)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-          <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: '.06em', color: c.amberDeep }}>TODAY · 15 MIN</span>
-          <span style={{ background: c.amberWash, color: c.amberDark, fontSize: 11, fontWeight: 800, padding: '4px 9px', borderRadius: 12 }}>Day 2 of 3</span>
+          <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: '.06em', color: c.amberDeep }}>
+            {weakest ? 'THE GAP TO CLOSE FIRST' : 'NOTHING MEASURED YET'}
+          </span>
+          <span style={{ background: c.amberWash, color: c.amberDark, fontSize: 11, fontWeight: 800, padding: '4px 9px', borderRadius: 12 }}>
+            {weakest ? `${weakestPct}% ready` : 'No tests yet'}
+          </span>
         </div>
-        <div style={{ fontFamily: serif, fontSize: 20, fontWeight: 600, lineHeight: 1.2, marginBottom: 4 }}>Quadratic word problems — practice set</div>
-        <p style={{ margin: '0 0 14px', fontSize: 13.5, color: c.ink2, fontWeight: 600 }}>Sit with {child.name}. Then ask him tonight&apos;s question.</p>
-        <button onClick={() => nav('/fix')} style={{ width: '100%', background: c.blue, color: '#fff', border: 'none', borderRadius: 14, padding: 15, fontSize: 15, fontWeight: 800, fontFamily: 'inherit' }}>
-          Continue the fix →
+        <div style={{ fontFamily: serif, fontSize: 20, fontWeight: 600, lineHeight: 1.2, marginBottom: 4 }}>{continueTitle}</div>
+        <p style={{ margin: '0 0 14px', fontSize: 13.5, color: c.ink2, fontWeight: 600 }}>{continueBody}</p>
+        <button onClick={() => nav(weakest ? '/fix' : '/audit/intro')} style={{ width: '100%', background: c.blue, color: '#fff', border: 'none', borderRadius: 14, padding: 15, fontSize: 15, fontWeight: 800, fontFamily: 'inherit' }}>
+          {weakest ? 'See the fix →' : 'Start the audit →'}
         </button>
       </div>
     </div>
   )
 
+  // Tiles used to promise a "Next test: Thursday" and a "Free audit ends in 4d".
+  // Nothing schedules a test and nothing expires, so both now report facts.
   const tiles = (
     <div style={{ display: 'flex', flexDirection: isDesktop ? 'column' : 'row', gap: isDesktop ? 14 : 11 }}>
       <button onClick={() => nav('/term-audit')} style={tile}>
-        <div style={{ fontSize: 12, color: c.ink3, fontWeight: 700, marginBottom: 4 }}>Next test</div>
-        <div style={{ fontFamily: serif, fontSize: 18, fontWeight: 600 }}>Thursday</div>
-        <div style={{ fontSize: 12, color: c.blue, fontWeight: 700 }}>Re-test the gap</div>
+        <div style={{ fontSize: 12, color: c.ink3, fontWeight: 700, marginBottom: 4 }}>Tests on record</div>
+        <div style={{ fontFamily: serif, fontSize: 18, fontWeight: 600 }}>{testsTaken}</div>
+        <div style={{ fontSize: 12, color: c.blue, fontWeight: 700 }}>See the term audit →</div>
       </button>
       <button onClick={keepRecord} style={tile}>
-        <div style={{ fontSize: 12, color: c.ink3, fontWeight: 700, marginBottom: 4 }}>Free audit</div>
-        <div style={{ fontFamily: serif, fontSize: 18, fontWeight: 600 }}>Ends in 4d</div>
+        <div style={{ fontSize: 12, color: c.ink3, fontWeight: 700, marginBottom: 4 }}>Your record</div>
+        <div style={{ fontFamily: serif, fontSize: 18, fontWeight: 600 }}>{accountStatus === 'guest' ? 'Not saved' : 'Saved'}</div>
         <div style={{ fontSize: 12, color: c.red, fontWeight: 700 }}>{accountStatus === 'guest' ? 'Save the record →' : 'Keep the record →'}</div>
       </button>
     </div>
@@ -115,9 +168,12 @@ export default function Home() {
           <div style={{ fontFamily: serif, fontSize: isDesktop ? 32 : 26, fontWeight: 600, lineHeight: 1 }}>{parentName}</div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: c.white, border: `1px solid ${c.line2}`, borderRadius: 22, padding: '6px 8px 6px 12px' }}>
-          <span style={{ fontSize: 13, fontWeight: 800, color: c.amberDeep }}>🔥 {streak}</span>
+          {/* the count is completed tests, not "weeks in a row" — 0 stays hidden */}
+          {streak > 0 && (
+            <span style={{ fontSize: 13, fontWeight: 800, color: c.amberDeep }} title={`${streak} test${streak === 1 ? '' : 's'} completed`}>🔥 {streak}</span>
+          )}
           <div style={{ width: 30, height: 30, borderRadius: '50%', background: c.blue, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, color: '#fff', fontSize: 14 }}>
-            {child.name[0]}
+            {child.name[0] ?? '?'}
           </div>
         </div>
       </div>

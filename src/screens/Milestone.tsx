@@ -3,10 +3,46 @@ import PhoneFrame from '../components/PhoneFrame'
 import { useApp } from '../state/AppContext'
 import { c, serif } from '../theme'
 
-// Screen 10 — Milestone moment. Identity + loss aversion, ethically (graceful freeze offered).
+// Screen 10 — Milestone moment. Identity, earned honestly: the count is the
+// child's real completed-test count (report.testsTaken via `streak`), and the
+// screen degrades to an early-days variant when there is no milestone yet.
 export default function Milestone() {
   const nav = useNavigate()
-  const { streak } = useApp()
+  const { child, streak, report } = useApp()
+
+  // A milestone needs something to celebrate. 0 or 1 test is "early days".
+  const early = streak < 2
+  const plural = streak === 1 ? 'test' : 'tests'
+  const name = child.name || 'your child'
+
+  const eyebrow = streak === 0 ? 'Nothing measured yet' : early ? 'The record has started' : 'Milestone unlocked'
+
+  const title = streak === 0 ? (
+    <>
+      No tests yet.
+      <br />
+      One starts the record.
+    </>
+  ) : early ? (
+    <>
+      First test done.
+      <br />
+      The record is open.
+    </>
+  ) : (
+    <>
+      {streak} {plural}.
+      <br />
+      All on the record.
+    </>
+  )
+
+  const body =
+    streak === 0
+      ? `Run ${name}'s first test and this page starts keeping score — with numbers that come from their answers, not from us.`
+      : early
+        ? `One test in, we can already see where ${name} stands. A few more and the pattern gets sharp enough to act on.`
+        : `${streak} ${plural} on the record — every number on this app comes from ${name}'s own answers.`
 
   return (
     <PhoneFrame
@@ -21,40 +57,47 @@ export default function Milestone() {
         <div style={{ position: 'absolute', inset: 16, border: '1px solid rgba(255,248,236,.25)', borderRadius: '50%' }} />
         <div style={{ width: 104, height: 104, background: '#FFF8EC', borderRadius: '50%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', boxShadow: '0 12px 30px -8px rgba(94,57,10,.6)' }}>
           <div style={{ fontFamily: serif, fontSize: 44, fontWeight: 700, color: c.amberDeep, lineHeight: 1 }}>{streak}</div>
-          <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '.1em', color: c.amberDark }}>MONDAYS</div>
+          <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '.1em', color: c.amberDark }}>{plural.toUpperCase()}</div>
         </div>
       </div>
 
-      <p style={{ fontSize: 12.5, fontWeight: 800, letterSpacing: '.18em', textTransform: 'uppercase', color: '#FBEFD9', margin: '34px 0 10px' }}>Milestone unlocked</p>
+      <p style={{ fontSize: 12.5, fontWeight: 800, letterSpacing: '.18em', textTransform: 'uppercase', color: '#FBEFD9', margin: '34px 0 10px' }}>{eyebrow}</p>
       <h2 style={{ fontFamily: serif, fontWeight: 600, fontSize: 36, lineHeight: 1.05, margin: '0 0 16px' }}>
-        {streak} Mondays.
-        <br />
-        Never missed one.
+        {title}
       </h2>
       <p style={{ fontSize: 16, lineHeight: 1.5, color: '#FBEBCE', margin: '0 0 26px', fontWeight: 500, maxWidth: 290 }}>
-        You&apos;ve become the parent who <em style={{ fontFamily: serif }}>checks</em> — not the one who hopes. Mukul knows Monday is test day now.
+        {early ? body : (
+          <>
+            You&apos;ve become the parent who <em style={{ fontFamily: serif }}>checks</em> — not the one who hopes. {body}
+          </>
+        )}
       </p>
 
+      {/* Was a "₹0 extra spent this month" claim we never measure. Now the one
+          number we do own: readiness, and what it was measured from. */}
       <div style={{ width: '100%', background: 'rgba(255,248,236,.14)', border: '1px solid rgba(255,248,236,.28)', borderRadius: 18, padding: '16px 20px', marginBottom: 'auto', display: 'flex', alignItems: 'center', gap: 14 }}>
-        <div style={{ fontFamily: serif, fontSize: 30, fontWeight: 700, color: '#FFF8EC' }}>₹0</div>
+        <div style={{ fontFamily: serif, fontSize: 30, fontWeight: 700, color: '#FFF8EC' }}>
+          {streak > 0 ? `${report.readinessPct}%` : '—'}
+        </div>
         <div style={{ textAlign: 'left' }}>
-          <div style={{ fontSize: 14, fontWeight: 800, color: '#FFF8EC' }}>extra spent this month</div>
-          <div style={{ fontSize: 12.5, color: '#FBEBCE', fontWeight: 600 }}>Just 15 min/day and your attention.</div>
+          <div style={{ fontSize: 14, fontWeight: 800, color: '#FFF8EC' }}>
+            {streak > 0 ? 'readiness, measured' : 'readiness, once you test'}
+          </div>
+          <div style={{ fontSize: 12.5, color: '#FBEBCE', fontWeight: 600 }}>
+            {streak > 0 ? `From ${streak} completed ${plural} — no guesswork.` : 'Nothing is scored until they answer.'}
+          </div>
         </div>
       </div>
 
       <button
-        onClick={() => nav('/term-audit')}
-        style={{ width: '100%', background: c.ink, color: '#FFF8EC', border: 'none', borderRadius: 16, padding: 18, fontSize: 16, fontWeight: 800, fontFamily: 'inherit', marginBottom: 12 }}
+        onClick={() => nav(streak === 0 ? '/audit/intro' : '/term-audit')}
+        style={{ width: '100%', background: c.ink, color: '#FFF8EC', border: 'none', borderRadius: 16, padding: 18, fontSize: 16, fontWeight: 800, fontFamily: 'inherit' }}
       >
-        Keep it alive — next test Monday
+        {streak === 0 ? 'Start the first test →' : 'See the term audit →'}
       </button>
-      <button
-        onClick={() => alert('Streak frozen while you’re away — no penalty.')}
-        style={{ background: 'none', border: 'none', fontSize: 13.5, color: '#FBEBCE', fontWeight: 700, textDecoration: 'underline', textUnderlineOffset: 3 }}
-      >
-        Going on holiday? Freeze the streak
-      </button>
+      {/* The "freeze the streak" link was an alert() promising a feature that
+          doesn't exist. Removed: there is no schedule to miss and no freeze to
+          store — the count is simply how many tests have been completed. */}
     </PhoneFrame>
   )
 }

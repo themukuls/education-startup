@@ -3,6 +3,7 @@
 
 import { fallbackCard, type CardCopy, type RenderRequest } from '../shared/card'
 import { llmHeaders } from './llm'
+import { authHeaders } from './auth'
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? ''
 
@@ -10,7 +11,7 @@ export async function renderCard(req: RenderRequest): Promise<{ card: CardCopy; 
   try {
     const res = await fetch(`${API_BASE}/api/render-card`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json', ...llmHeaders() },
+      headers: { 'content-type': 'application/json', ...authHeaders(), ...llmHeaders() },
       body: JSON.stringify(req),
       signal: AbortSignal.timeout(45_000),
     })

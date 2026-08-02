@@ -63,9 +63,21 @@ on all interfaces, so no build step or config is needed beyond the env vars.
    | Variable | Value |
    | --- | --- |
    | `DATABASE_URL` | Supabase **session pooler**, port **5432** (from step 1) |
-   | `CORS_ORIGIN` | `https://<your-vercel-app>` — locks the API to your frontend |
+   | `CORS_ORIGIN` | `https://<your-vercel-app>` — which browser origins may call the API |
    | `ANTHROPIC_API_KEY` / `GEMINI_API_KEY` / `OPENAI_API_KEY` / `GROQ_API_KEY` | optional; unset = mock |
    | `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_ID` | optional; unset = mock |
+   | `WHATSAPP_APP_SECRET` | **required with a live webhook** — the App Secret from the Meta app dashboard. Verifies the `X-Hub-Signature-256` HMAC on `/api/whatsapp/inbound`; unset, the check is skipped and forged inbound payloads are accepted |
+   | `WHATSAPP_VERIFY_TOKEN` | a string you invent, pasted into Meta's Callback URL form. Meta echoes it in the one-time `GET /api/whatsapp/inbound` handshake; unset, the handshake is refused and Meta never registers the webhook |
+   | `ADMIN_SECRET` | long random string, sent as the `x-admin-secret` header, guarding `POST /api/rag/ingest`. Unset, that route returns **503** — it never falls open |
+
+   **`CORS_ORIGIN` is not access control.** CORS is enforced by *browsers*, on
+   the browser's side: it stops another site's JavaScript from reading your API's
+   responses. It does nothing against `curl`, a script, or any non-browser
+   client — those ignore the header entirely and get the full response. The
+   access control is **auth**: every route that spends money or touches user
+   data requires a bearer token (`requireAuth`), the WhatsApp webhook requires
+   Meta's HMAC, and RAG ingest requires `ADMIN_SECRET`. Set `CORS_ORIGIN` as
+   defence in depth, never as the boundary.
 
 3. Deploy. On first boot it creates the schema in Supabase and seeds the demo.
 

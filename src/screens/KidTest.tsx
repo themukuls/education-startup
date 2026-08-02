@@ -9,22 +9,32 @@ import { c, serif } from '../theme'
 
 const TOTAL_SECONDS = 600
 
+// Used only until the child has a profile / any history to read from.
+const DEFAULT_SUBJECT = 'Maths'
+const DEFAULT_CHAPTER = 'Quadratics'
+
 // Screen 05 — Kid test (kid-facing). One path, big targets, live progress bar.
 // This wrapper loads the generated test (LLM backend), showing a brief
 // preparing state, then renders the runner. Falls back to the static bank.
 export default function KidTest() {
-  const { child } = useApp()
+  const { child, report } = useApp()
   const [test, setTest] = useState<TestResult | null>(null)
+
+  // Test the child's own subject, and the chapter they are currently weakest at
+  // — report.chapters is sorted weakest-first — so the audit re-tests the real
+  // gap and rotates as the ledger moves, instead of repeating one fixed test.
+  const subject = child.subjects[0] ?? DEFAULT_SUBJECT
+  const chapter = report.chapters?.[0]?.chapter ?? DEFAULT_CHAPTER
 
   useEffect(() => {
     let alive = true
-    loadTest({ board: child.board, klass: child.klass, subject: 'Maths', chapter: 'Quadratics' }).then((t) => {
+    loadTest({ board: child.board, klass: child.klass, subject, chapter }).then((t) => {
       if (alive) setTest(t)
     })
     return () => {
       alive = false
     }
-  }, [child.board, child.klass])
+  }, [child.board, child.klass, subject, chapter])
 
   if (!test) return <PreparingScreen name={child.name} />
   return <TestRunner questions={test.questions} />

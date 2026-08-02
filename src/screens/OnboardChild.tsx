@@ -23,6 +23,35 @@ const label = {
   color: c.ink3,
 }
 
+const BOARDS = ['CBSE', 'ICSE', 'State Board']
+const CLASSES = [6, 7, 8, 9, 10, 11, 12]
+
+// Native <select> styled to match the rest of the app (appearance: 'none' so the
+// browser's own arrow is replaced by our ▾ affordance).
+const selectStyle: React.CSSProperties = {
+  width: '100%',
+  border: `1.5px solid ${c.line3}`,
+  borderRadius: 14,
+  padding: '15px 30px 15px 16px',
+  fontSize: 15,
+  fontWeight: 700,
+  fontFamily: 'inherit',
+  color: c.ink,
+  background: c.white,
+  appearance: 'none',
+  outline: 'none',
+}
+
+const caret: React.CSSProperties = {
+  position: 'absolute',
+  right: 16,
+  top: '50%',
+  transform: 'translateY(-50%)',
+  color: c.ink4,
+  pointerEvents: 'none',
+  fontSize: 15,
+}
+
 // Screen 02 — Build your child's profile. Endowment: you create it in session 1.
 export default function OnboardChild() {
   const nav = useNavigate()
@@ -69,15 +98,35 @@ export default function OnboardChild() {
 
       <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
         <div style={{ flex: 1 }}>
-          <label style={{ ...label, marginBottom: 7, display: 'block' }}>Board</label>
-          <div style={{ border: `1.5px solid ${c.line3}`, borderRadius: 14, padding: '15px 16px', fontSize: 15, fontWeight: 700, background: c.white, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            {child.board} <span style={{ color: c.ink4 }}>▾</span>
+          <label style={{ ...label, marginBottom: 7, display: 'block' }} htmlFor="pp-board">Board</label>
+          <div style={{ position: 'relative' }}>
+            <select
+              id="pp-board"
+              value={child.board}
+              onChange={(e) => setChild({ board: e.target.value })}
+              style={selectStyle}
+            >
+              {(BOARDS.includes(child.board) ? BOARDS : [...BOARDS, child.board]).map((b) => (
+                <option key={b} value={b}>{b}</option>
+              ))}
+            </select>
+            <span style={caret}>▾</span>
           </div>
         </div>
         <div style={{ width: 112 }}>
-          <label style={{ ...label, marginBottom: 7, display: 'block' }}>Class</label>
-          <div style={{ border: `1.5px solid ${c.line3}`, borderRadius: 14, padding: '15px 16px', fontSize: 15, fontWeight: 700, background: c.white, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            {child.klass} <span style={{ color: c.ink4 }}>▾</span>
+          <label style={{ ...label, marginBottom: 7, display: 'block' }} htmlFor="pp-class">Class</label>
+          <div style={{ position: 'relative' }}>
+            <select
+              id="pp-class"
+              value={child.klass}
+              onChange={(e) => setChild({ klass: Number(e.target.value) })}
+              style={selectStyle}
+            >
+              {(CLASSES.includes(child.klass) ? CLASSES : [...CLASSES, child.klass].sort((a, b) => a - b)).map((k) => (
+                <option key={k} value={k}>{k}</option>
+              ))}
+            </select>
+            <span style={caret}>▾</span>
           </div>
         </div>
       </div>

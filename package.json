@@ -9,6 +9,7 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "typecheck": "tsc -b --noEmit",
+    "typecheck:server": "tsc -p tsconfig.server.json",
     "test": "vitest run",
     "server": "tsx watch --env-file-if-exists=.env server/index.ts",
     "server:start": "tsx --env-file-if-exists=.env server/index.ts",

@@ -5,11 +5,37 @@ import { useApp } from '../state/AppContext'
 import { pay, type Plan } from '../api/payment'
 import { c, serif } from '../theme'
 
-// Screen 12 — Upgrade (free audit ends). Loss aversion + endowment; anchored pricing.
+// Screen 12 — Upgrade. Endowment framing built only from what we've actually
+// measured: real test count, real chapter count, real trajectory. Nothing here
+// claims an expiry date, because nothing in the product expires on a date.
 export default function Upgrade() {
   const nav = useNavigate()
-  const { child, parentName, parentPhone, accountStatus, openSaveGate, markPlan } = useApp()
+  const { child, parentName, parentPhone, accountStatus, openSaveGate, markPlan, report, streak } = useApp()
   const [busy, setBusy] = useState<Plan | null>(null)
+
+  const tests = report.testsTaken
+  const chapters = report.chapters.length
+  const velocity = report.velocityPtsPerWeek
+  const hasHistory = tests > 0
+
+  const eyebrow = hasHistory
+    ? `${streak} test${streak === 1 ? '' : 's'} on the record`
+    : 'Nothing measured yet'
+
+  // Small numbers are the honest answer for a new account — the copy is written
+  // to work at 1 test as well as at 12, instead of inflating anything.
+  const built = hasHistory
+    ? `You've built ${tests} test${tests === 1 ? '' : 's'}${chapters ? ` across ${chapters} chapter${chapters === 1 ? '' : 's'}` : ''} on ${child.name}.`
+    : `${child.name}'s record is still empty — one audit is all it takes to start it.`
+  const trajectory =
+    velocity != null
+      ? ` Trajectory so far: ${velocity > 0 ? '+' : ''}${velocity} readiness points a week.`
+      : hasHistory
+        ? ' A few more weekly tests and we can show a trajectory too.'
+        : ''
+  const closer = hasHistory
+    ? ' Core keeps the weekly tests — and the history — going.'
+    : ' Core is the weekly rhythm that turns one audit into a trend you can act on.'
 
   const buy = async (plan: Plan) => {
     // guests must save their record (phone) before paying
@@ -39,16 +65,28 @@ export default function Upgrade() {
         <button onClick={() => nav('/home')} style={{ background: 'none', border: 'none', fontSize: 20, color: c.ink4, fontWeight: 400 }} aria-label="Close">✕</button>
       </div>
 
-      <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', color: c.red, marginBottom: 6 }}>Free audit ends in 4 days</div>
+      <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', color: c.red, marginBottom: 6 }}>{eyebrow}</div>
       <h2 style={{ fontFamily: serif, fontWeight: 600, fontSize: 30, lineHeight: 1.08, margin: '0 0 12px' }}>
-        Don&apos;t lose {child.name}&apos;s
-        <br />
-        record now.
+        {hasHistory ? (
+          <>
+            Keep {child.name}&apos;s
+            <br />
+            record going.
+          </>
+        ) : (
+          <>
+            Start {child.name}&apos;s
+            <br />
+            record properly.
+          </>
+        )}
       </h2>
 
       <div style={{ background: c.redWash, border: `1px solid ${c.redBorder}`, borderRadius: 16, padding: '15px 18px', marginBottom: 18 }}>
         <p style={{ margin: 0, fontSize: 14, lineHeight: 1.45, color: c.redInk, fontWeight: 600 }}>
-          You&apos;ve already built <b>3 tests</b>, <b>1 diagnosis</b> and a <b>5-Monday streak</b>. Trajectory: <b>+14 points</b>. All of it resets if the audit lapses.
+          {built}
+          {trajectory}
+          {closer}
         </p>
       </div>
 
@@ -85,7 +123,9 @@ export default function Upgrade() {
         <div style={{ border: '1px dashed #D8CFC0', borderRadius: 18, padding: '14px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', opacity: 0.7 }}>
           <div>
             <div style={{ fontSize: 15, fontWeight: 800, color: c.ink3 }}>Free Audit</div>
-            <div style={{ fontSize: 12.5, color: c.ink4, fontWeight: 600 }}>Ends Thursday</div>
+            <div style={{ fontSize: 12.5, color: c.ink4, fontWeight: 600 }}>
+              {hasHistory ? `What you have now · ${tests} test${tests === 1 ? '' : 's'}` : 'What you have now'}
+            </div>
           </div>
           <div style={{ fontFamily: serif, fontSize: 20, fontWeight: 700, color: c.ink4 }}>₹0</div>
         </div>
